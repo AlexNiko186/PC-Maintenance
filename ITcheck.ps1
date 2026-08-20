@@ -1,8 +1,3 @@
-﻿# =========================================================================
-# ClinicOptimizer-GUI.ps1
-# Interactive GUI Deployment Script with Auto-Resume State Tracking
-# =========================================================================
-
 # --- Pre-flight Check: Ensure Admin Rights ---
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     Write-Host "[-] This script requires Administrator privileges. Please run PowerShell as Admin." -ForegroundColor Red
@@ -132,7 +127,7 @@ function Run-Step1 {
 
     $SetForm = New-Object System.Windows.Forms.Form
     $SetForm.Text = "Configure Windows Settings"
-    $SetForm.Size = New-Object System.Drawing.Size(540, 1000) # Made tall enough to fit the new Permissions row
+    $SetForm.Size = New-Object System.Drawing.Size(540, 820)
     $SetForm.StartPosition = "CenterParent"
     $SetForm.FormBorderStyle = "FixedDialog"
     $SetForm.MaximizeBox = $false
@@ -196,12 +191,6 @@ function Run-Step1 {
     $curGaming = Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1
     if ($curGaming -ne 0) { $curGaming = 1 }
 
-    $wifiAdapter = Get-NetAdapter | Where-Object { $_.Name -match "Wi-Fi" -or $_.InterfaceDescription -match "Wireless" } | Select-Object -First 1
-    $curWifi = if ($wifiAdapter -and $wifiAdapter.Status -eq "Disabled") { 0 } else { 1 }
-
-    $btService = Get-Service -Name "bthserv" -ErrorAction SilentlyContinue
-    $curBT = if ($btService.Status -eq "Stopped") { 0 } else { 1 }
-
     # --- BUILD THE DYNAMIC MENUS ---
     $cmbTheme = Add-SettingRow "System Theme:" "Dark Mode" "Sets Windows apps and system background to Dark Mode." "Light Mode (Comodo Standard)" "Sets standard Windows app and system background colors." 1 $curTheme
     $cmbTaskbar = Add-SettingRow "Taskbar Alignment:" "Left (Comodo Standard)" "Aligns taskbar left and hides Widgets, Chat, and Search box." "Center" "Aligns taskbar to the center and leaves Widgets/Search enabled." 0 $curTaskbar
@@ -211,8 +200,6 @@ function Run-Step1 {
     $cmbPrivacy = Add-SettingRow "Privacy Tracking:" "Secure/Disabled (Comodo Standard)" "Disables diagnostic data, search history, speech targeting, & inking." "Windows Default (Enabled)" "Allows Microsoft to collect telemetry, inking, and diagnostic data." 0 $curPrivacy
     $cmbWinPerm = Add-SettingRow "Windows Permissions:" "Disabled (Comodo Standard)" "Turns off Ad ID, Activity History, App Launch tracking, and Tailored Experiences." "Windows Default (Enabled)" "Leaves standard Windows behavior tracking active." 0 $curWinPerm
     $cmbGaming = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming
-    $cmbWifi = Add-SettingRow "Wi-Fi Capabilities:" "Disabled (Comodo Standard)" "Soft-disables the Wi-Fi adapter (like flipping the switch in Settings)." "Enabled" "Leaves Wi-Fi active and running normally." 0 $curWifi
-    $cmbBT = Add-SettingRow "Bluetooth Radios:" "Disabled (Comodo Standard)" "Stops the Bluetooth service gracefully without hard-locking the OS." "Enabled" "Leaves Bluetooth active and running normally." 0 $curBT
 
     $btnApply = New-Object System.Windows.Forms.Button
     $btnApply.Text = "Apply Settings"
@@ -266,22 +253,6 @@ function Run-Step1 {
 
         $idxGaming = $cmbGaming.SelectedIndex
         Set-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" $idxGaming; Set-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" "AppCaptureEnabled" $idxGaming; Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" $idxGaming; Set-RegKey "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" $idxGaming
-
-        # Wi-Fi Capabilities (Soft Toggle via NetAdapter)
-        if ($cmbWifi.SelectedIndex -eq 0) { 
-            Get-NetAdapter | Where-Object { $_.Name -match "Wi-Fi" -or $_.InterfaceDescription -match "Wireless" } | Disable-NetAdapter -Confirm:$false -ErrorAction SilentlyContinue 
-        } else { 
-            Get-NetAdapter | Where-Object { $_.Name -match "Wi-Fi" -or $_.InterfaceDescription -match "Wireless" } | Enable-NetAdapter -Confirm:$false -ErrorAction SilentlyContinue 
-        }
-
-        # Bluetooth Radios (Soft Toggle via Service State)
-        if ($cmbBT.SelectedIndex -eq 0) { 
-            Set-Service -Name "bthserv" -StartupType Manual -ErrorAction SilentlyContinue
-            Stop-Service -Name "bthserv" -Force -ErrorAction SilentlyContinue 
-        } else { 
-            Set-Service -Name "bthserv" -StartupType Automatic -ErrorAction SilentlyContinue
-            Start-Service -Name "bthserv" -ErrorAction SilentlyContinue 
-        }
 
         Write-Success "Settings applied. Restarting Explorer..."
         Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
