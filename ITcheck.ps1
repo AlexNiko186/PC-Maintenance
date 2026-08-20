@@ -91,7 +91,6 @@ $StateFile = Join-Path $StateDir "progress.txt"
 
 function Save-StepState ([int]$StepNum) {
     if (-not (Test-Path $StateDir)) { New-Item -Path $StateDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null }
-
     $existing = @()
     if (Test-Path $StateFile) { $existing = Get-Content $StateFile -ErrorAction SilentlyContinue }
     if ($existing -notcontains $StepNum) { Add-Content -Path $StateFile -Value $StepNum -Force -ErrorAction SilentlyContinue }
