@@ -127,7 +127,7 @@ function Run-Step1 {
 
     $SetForm = New-Object System.Windows.Forms.Form
     $SetForm.Text = "Configure Windows Settings"
-    $SetForm.Size = New-Object System.Drawing.Size(540, 920)
+    $SetForm.Size = New-Object System.Drawing.Size(540, 1000)
     $SetForm.StartPosition = "CenterParent"
     $SetForm.FormBorderStyle = "FixedDialog"
     $SetForm.MaximizeBox = $false
@@ -185,6 +185,9 @@ function Run-Step1 {
     $curPrivacyVal = Get-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 1
     $curPrivacy = if ($curPrivacyVal -eq 0) { 0 } else { 1 }
 
+    $curWinPermVal = Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" 1
+    $curWinPerm = if ($curWinPermVal -eq 0) { 0 } else { 1 }
+
     $curGaming = Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1
     if ($curGaming -ne 0) { $curGaming = 1 }
 
@@ -201,6 +204,9 @@ function Run-Step1 {
     $cmbRDP = Add-SettingRow "Remote Desktop:" "Enabled (Comodo Standard)" "Allows RDP access and securely configures Windows Firewall." "Disabled" "Blocks incoming Remote Desktop connections to this PC." 0 $curRDP
     $cmbStorage = Add-SettingRow "Storage Sense:" "Disabled" "Turns off automated Storage Sense background cleanup." "Enabled (Comodo Standard)" "Auto-deletes Recycle Bin (1 Day) and Downloads folder (14 Days)." 1 $curStorage
     $cmbPrivacy = Add-SettingRow "Privacy Tracking:" "Secure/Disabled (Comodo Standard)" "Disables diagnostic data, search history, speech targeting, & inking." "Windows Default (Enabled)" "Allows Microsoft to collect telemetry, inking, and diagnostic data." 0 $curPrivacy
+    $cmbWinPerm = Add-SettingRow "Windows Permissions:" `
+        "Disabled (Comodo Standard)" "Turns off Ad ID, Activity History, App Launch tracking, and Tailored Experiences." `
+        "Windows Default (Enabled)" "Leaves standard Windows behavior tracking active." 0 $curWinPerm
     $cmbGaming = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming
     $cmbWifi = Add-SettingRow "Wi-Fi Capabilities:" "Disabled (Comodo Standard)" "Stops and disables the WLAN AutoConfig service." "Enabled" "Leaves Wi-Fi services running normally." 0 $curWifi
     $cmbBT = Add-SettingRow "Bluetooth Radios:" "Disabled (Comodo Standard)" "Stops and disables the Bluetooth Support service." "Enabled" "Leaves Bluetooth services running normally." 0 $curBT
@@ -246,6 +252,20 @@ function Run-Step1 {
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\SearchSettings" "IsDeviceSearchHistoryEnabled" $idxPrivacy
         $restrict = if ($idxPrivacy -eq 0) { 1 } else { 0 }
         Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitInkCollection" $restrict; Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitTextCollection" $restrict
+
+        # Windows Permissions (General Privacy, Ad ID, Activity History)
+        $idxWinPerm = $cmbWinPerm.SelectedIndex
+        # 0 = Disabled, 1 = Enabled
+        Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" $idxWinPerm
+        Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Start_TrackProgs" $idxWinPerm
+        
+        # Activity History / Tailored Experiences
+        Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" "EnableActivityFeed" $idxWinPerm
+        Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy" "TailoredExperiencesWithDiagnosticDataEnabled" $idxWinPerm
+        
+        # Website Language Access (1 = Opt-Out/Disabled, 0 = Enabled)
+        $optOut = if ($idxWinPerm -eq 0) { 1 } else { 0 }
+        Set-RegKey "HKCU:\Control Panel\International\User Profile" "HttpAcceptLanguageOptOut" $optOut
 
         $idxGaming = $cmbGaming.SelectedIndex
         Set-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" $idxGaming; Set-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" "AppCaptureEnabled" $idxGaming; Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" $idxGaming; Set-RegKey "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" $idxGaming
