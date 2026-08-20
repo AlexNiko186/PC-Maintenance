@@ -465,12 +465,14 @@ function Run-Step7 {
         Write-Success "All temporary data and stuck print queues destroyed."
 
         $script:btnStep7.Text = "✅ 7. Purge Temp & Spooler"
+
         # --- SELF DESTRUCT MECHANISM ---
         if ($PSCommandPath) {
             Remove-Item -Path $PSCommandPath -Force -ErrorAction SilentlyContinue
             Write-Log "   -> Script self-destruct sequence initiated. File removed." "DarkGray"
         }
-        
+        # -------------------------------
+
         $result = [System.Windows.Forms.MessageBox]::Show(
             "All optimization steps are completely finished! Would you like to restart the PC now to finalize everything?",
             "Final Restart",
