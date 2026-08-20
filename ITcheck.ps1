@@ -470,9 +470,7 @@ function Run-Step7 {
             Remove-Item -Path $PSCommandPath -Force -ErrorAction SilentlyContinue
             Write-Log "   -> Script self-destruct sequence initiated. File removed." "DarkGray"
         }
-        # -------------------------------
-
-        $result = [System.Windows.Forms.MessageBox]::Show(
+        
         $result = [System.Windows.Forms.MessageBox]::Show(
             "All optimization steps are completely finished! Would you like to restart the PC now to finalize everything?",
             "Final Restart",
