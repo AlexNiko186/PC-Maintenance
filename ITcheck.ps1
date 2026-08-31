@@ -160,8 +160,8 @@ function Run-Step6 {
     Write-Info "Step 6: Clinic PC Optimizations (Conservative)"
     # Power plan: high performance but keep reasonable timeouts
     powercfg.exe /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c 2>$null | Out-Null
-    powercfg.exe /change monitor-timeout-ac 15   # 15 min monitor off
-    powercfg.exe /change standby-timeout-ac 30   # 30 min sleep
+    powercfg.exe /change monitor-timeout-ac 15   # 15 min monitor off
+    powercfg.exe /change standby-timeout-ac 30   # 30 min sleep
     if ($SafeMode) {
         Write-Warning "Safe Mode: Leaving hibernation enabled. Set Set-ItemProperty ... HiberbootEnabled 1 if you want to disable."
     } else {
@@ -175,15 +175,20 @@ function Run-Step6 {
 }
 function Run-Step7 {
     Write-Info "Step 7: Purge Temp & Cache (Selective)"
-    $folders = @(
+    # Build folder list dynamically to avoid syntax issues
+    $folderList = @(
         $env:TEMP,
-        "C:\Windows\Temp",
-        if (-not $SafeMode) { "C:\Windows\Prefetch" } else { $null },
-        "C:\Windows\SoftwareDistribution\Download",
-        if (-not $SafeMode) { "C:\ProgramData\Microsoft\Windows\WER\ReportArchive" } else { $null }
-    ) | Where-Object { $_ }
+        "C:\Windows\Temp"
+    )
+    if (-not $SafeMode) {
+        $folderList += "C:\Windows\Prefetch"
+    }
+    $folderList += "C:\Windows\SoftwareDistribution\Download"
+    if (-not $SafeMode) {
+        $folderList += "C:\ProgramData\Microsoft\Windows\WER\ReportArchive"
+    }
 
-    foreach ($path in $folders) {
+    foreach ($path in $folderList) {
         if (Test-Path $path) {
             try {
                 Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue |
