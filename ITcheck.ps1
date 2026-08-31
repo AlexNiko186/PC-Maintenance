@@ -195,8 +195,7 @@ function Run-Step7 {
                     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
                 Write-Info "Cleared: $path"
             } catch {
-                Write-Warning "Error clearing $path: $_"
-            }
+                Write-Warning "Error clearing ${path}: $_"            }
         }
     }
     try { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Write-Info "Recycle Bin emptied." }
