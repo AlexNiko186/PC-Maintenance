@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    Clinic PC Maintenance Utility – Optimized Interactive Version
+    Clinic PC Maintenance Utility â€“ Optimized Interactive Version
 .DESCRIPTION
     Provides a GUI for routine Windows maintenance tasks with safety checks,
     detailed logging, and manual control (no forced restarts).
@@ -27,19 +27,29 @@ function Write-Log {
         [switch]$Timestamp
     )
     $time = if ($Timestamp) { "[{0:yyyy-MM-dd HH:mm:ss}] " -f (Get-Date) } else { '' }
-    $color = switch ($Level) {
-        'Info'    { [System.Drawing.Color]::Black }
-        'Success' { [System.Drawing.Color]::Green }
-        'Warning' { [System.Drawing.Color]::DarkOrange }
-        'Error'   { [System.Drawing.Color]::Red }
-    }
     $entry = "{0}{1}`n" -f $time,$Message
-    if ($Host.UI -is [System.Management.Automation.Host.InternalHost]) {
-        # GUI rich text box (will be filled later)
+    # Try to write to GUI rich textbox if it exists
+    if ($script:RichTextBox) {
+        $script:RichTextBox.SelectionStart = $script:RichTextBox.TextLength
+        $script:RichTextBox.SelectionLength = 0
+        switch ($Level) {
+            'Info'    { $script:RichTextBox.SelectionColor = [System.Drawing.Color]::White }
+            'Success' { $script:RichTextBox.SelectionColor = [System.Drawing.Color]::LightGreen }
+            'Warning' { $script:RichTextBox.SelectionColor = [System.Drawing.Color]::Yellow }
+            'Error'   { $script:RichTextBox.SelectionColor = [System.Drawing.Color]::LightCoral }
+        }
         $script:RichTextBox.AppendText($entry)
         $script:RichTextBox.ScrollToCaret()
+    } else {
+        # Fallback to console host
+        switch ($Level) {
+            'Info'    { Write-Host $entry -ForegroundColor White }
+            'Success' { Write-Host $entry -ForegroundColor Green }
+            'Warning' { Write-Host $entry -ForegroundColor Yellow }
+            'Error'   { Write-Host $entry -ForegroundColor Red }
+        }
     }
-    # Also write to file
+    # Always write to file for persistence
     Add-Content -Path $LogFile -Value $entry -Encoding UTF8
 }
 function Write-Info    { param([string]$m) Write-Log -Message $m -Level Info    -Timestamp }
@@ -92,13 +102,13 @@ function Run-Step1 {
         Set-RegSafe "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue | Out-Null
     }
-    # Storage Sense – keep enabled but tune thresholds
+    # Storage Sense â€“ keep enabled but tune thresholds
     Set-RegSafe "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "01" 1
     Set-RegSafe "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "08" 1
     Set-RegSafe "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "256" 1
     Set-RegSafe "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "32" 1
     Set-RegSafe "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "512" 14
-    # Privacy – basic telemetry (1) to keep essential diagnostics
+    # Privacy â€“ basic telemetry (1) to keep essential diagnostics
     Set-RegSafe "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 1
     Write-Success "Step 1 complete: conservative settings applied."
     Save-Progress -Step 1
@@ -113,7 +123,7 @@ function Run-Step2 {
 function Run-Step3 {
     Write-Info "Step 3: Review Winget Updates (Safe Mode)"
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Warning "Winget not installed – skipping."
+        Write-Warning "Winget not installed â€“ skipping."
         return
     }
     $list = winget upgrade --accept-source-agreements 2>$null
@@ -129,7 +139,7 @@ function Run-Step4 {
     Write-Info "Step 4: CCleaner (Limited Safe Mode)"
     $ccleaner = "C:\ITDepartment\CCleaner\CCleaner64.exe"
     if (-not (Test-Path $ccleaner)) {
-        Write-Warning "CCleaner not found at $ccleaner – skipping."
+        Write-Warning "CCleaner not found at $ccleaner â€“ skipping."
         return
     }
     if ($SafeMode) {
@@ -170,7 +180,7 @@ function Run-Step6 {
     Set-RegSafe "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers" "DisableAutoplay" 1
     Set-RegSafe "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" "NoDriveTypeAutoRun" 255
     Set-RegSafe "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" "VisualFXSetting" 2
-    Write-Success "Step 6 applied: performance‑oriented power & visuals, AutoPlay disabled."
+    Write-Success "Step 6 applied: performanceâ€‘oriented power & visuals, AutoPlay disabled."
     Save-Progress -Step 6
 }
 function Run-Step7 {
@@ -195,7 +205,8 @@ function Run-Step7 {
                     Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
                 Write-Info "Cleared: $path"
             } catch {
-                Write-Warning "Error clearing ${path}: $_"            }
+                Write-Warning "Error clearing $path: $_"
+            }
         }
     }
     try { Clear-RecycleBin -Force -ErrorAction SilentlyContinue; Write-Info "Recycle Bin emptied." }
@@ -211,10 +222,13 @@ Add-Type -AssemblyName System.Drawing
 
 $MainForm = New-Object System.Windows.Forms.Form
 $MainForm.Text = "Clinic PC Maintenance Utility (Optimized)"
-$MainForm.Size = New-Object System.Drawing.Size(800, 520)
+$MainForm.Size = New-Object System.Drawing.Size(800, 560) # Slightly taller for button at bottom
 $MainForm.StartPosition = "CenterScreen"
 $MainForm.FormBorderStyle = "FixedDialog"
 $MainForm.MaximizeBox = $false
+# Dark theme
+$MainForm.BackColor = [System.Drawing.Color]::FromArgb(30,30,30)
+$MainForm.ForeColor = [System.Drawing.Color]::White
 
 $TitleFont = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
 $BtnFont   = New-Object System.Drawing.Font("Segoe UI", 9)
@@ -223,13 +237,14 @@ $LogFont   = New-Object System.Drawing.Font("Consolas", 9)
 $lblTitle = New-Object System.Windows.Forms.Label
 $lblTitle.Text = "System Optimization Toolkit"
 $lblTitle.Font = $TitleFont
+$lblTitle.ForeColor = [System.Drawing.Color]::White
 $lblTitle.AutoSize = $true
 $lblTitle.Location = New-Object System.Drawing.Point(15, 15)
 $MainForm.Controls.Add($lblTitle)
 
 $Panel = New-Object System.Windows.Forms.FlowLayoutPanel
 $Panel.Location = New-Object System.Drawing.Point(15, 50)
-$Panel.Size = New-Object System.Drawing.Size(240, 400)
+$Panel.Size = New-Object System.Drawing.Size(240, 460) # Adjusted height
 $Panel.FlowDirection = "TopDown"
 $Panel.WrapContents = $false
 $MainForm.Controls.Add($Panel)
@@ -240,14 +255,27 @@ function Add-GuiButton {
     $btn.Text = $Text
     $btn.Size = New-Object System.Drawing.Size(220, 35)
     $btn.Font = $BtnFont
+    $btn.BackColor = [System.Drawing.Color]::FromArgb(45,45,45)
+    $btn.ForeColor = [System.Drawing.Color]::White
+    $btn.FlatStyle = 'Flat'
+    $btn.FlatAppearance.BorderColor = [System.Drawing.Color]::FromArgb(70,70,70)
     $btn.Margin = New-Object System.Windows.Forms.Padding(0,0,0,6)
     $btn.Add_Click($Action)
     $Panel.Controls.Add($btn)
     return $btn
 }
 
-# Manual Restart Button (top)
-$script:btnRestart = Add-GuiButton "🔄 Restart PC" {
+# Individual Step buttons (will be added before restart button)
+$script:btnStep1 = Add-GuiButton "1. Configure Windows Settings" { Run-Step1 }
+$script:btnStep2 = Add-GuiButton "2. Review Windows Updates"   { Run-Step2 }
+$script:btnStep3 = Add-GuiButton "3. Review Winget Updates"    { Run-Step3 }
+$script:btnStep4 = Add-GuiButton "4. Launch CCleaner (Limited)"{ Run-Step4 }
+$script:btnStep5 = Add-GuiButton "5. Revo Uninstaller (Disabled)" { Run-Step5 }
+$script:btnStep6 = Add-GuiButton "6. Apply Clinic Optimizations" { Run-Step6 }
+$script:btnStep7 = Add-GuiButton "7. Purge Temp & Cache (Selective)" { Run-Step7 }
+
+# Manual Restart Button (placed at bottom after steps)
+$script:btnRestart = Add-GuiButton "Restart PC" {
     $answer = [System.Windows.Forms.MessageBox]::Show(
         "Are you sure you want to restart the computer now?",
         "Confirm Restart",
@@ -260,44 +288,25 @@ $script:btnRestart = Add-GuiButton "🔄 Restart PC" {
         Restart-Computer -Force
     }
 }
-$script:btnRestart.BackColor = [System.Drawing.Color]::LightSalmon
+$script:btnRestart.BackColor = [System.Drawing.Color]::FromArgb(200,0,0) # Dark red for emphasis
+$script:btnRestart.ForeColor = [System.Drawing.Color]::White
 $script:btnRestart.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-
-# Run All Steps Button
-$btnRunAll = Add-GuiButton "▶ RUN ALL STEPS" {
-    $done = Get-Progress
-    for ($s=1; $s -le 7; $s++) {
-        if (-not ($done -contains $s)) {
-            &("Run-Step$s")
-        }
-    }
-    Write-Info "All steps processed."
-}
-$btnRunAll.BackColor = [System.Drawing.Color]::LightGreen
-$btnRunAll.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-
-# Individual Step buttons
-$script:btnStep1 = Add-GuiButton "1. Configure Windows Settings" { Run-Step1 }
-$script:btnStep2 = Add-GuiButton "2. Review Windows Updates"   { Run-Step2 }
-$script:btnStep3 = Add-GuiButton "3. Review Winget Updates"    { Run-Step3 }
-$script:btnStep4 = Add-GuiButton "4. Launch CCleaner (Limited)"{ Run-Step4 }
-$script:btnStep5 = Add-GuiButton "5. Revo Uninstaller (Disabled)" { Run-Step5 }
-$script:btnStep6 = Add-GuiButton "6. Apply Clinic Optimizations" { Run-Step6 }
-$script:btnStep7 = Add-GuiButton "7. Purge Temp & Cache (Selective)" { Run-Step7 }
+$script:btnRestart.Margin = New-Object System.Windows.Forms.Padding(0,15,0,0) # Space above
 
 $RichTextBox = New-Object System.Windows.Forms.RichTextBox
 $RichTextBox.Location = New-Object System.Drawing.Point(270, 50)
-$RichTextBox.Size = New-Object System.Drawing.Size(500, 420)
+$RichTextBox.Size = New-Object System.Drawing.Size(500, 460)
 $RichTextBox.Font = $LogFont
 $RichTextBox.ReadOnly = $true
-$RichTextBox.BackColor = [System.Drawing.Color]::White
+$RichTextBox.BackColor = [System.Drawing.Color]::FromArgb(20,20,20)
+$RichTextBox.ForeColor = [System.Drawing.Color]::White
 $RichTextBox.ScrollBars = "Vertical"
 $MainForm.Controls.Add($RichTextBox)
 
 function Write-WarningMsg { param([string]$m) Write-Log -Message $m -Level Warning }
 
 Write-Info "Welcome to the Clinic PC Maintenance Utility (Optimized)."
-Write-Info "SafeMode = $SafeMode – risky actions are limited or disabled."
+Write-Info "SafeMode = $SafeMode â€“ risky actions are limited or disabled."
 Write-Info "Click a step or 'RUN ALL STEPS'. Logs are written to `$LogFile`."
 Write-Info "Note: Some steps may require a restart; use the manual Restart button when needed.``n"
 
@@ -307,13 +316,13 @@ if ($completed.Count -gt 0) {
     Write-Info "Resuming session. Completed steps: $($completed -join ', ')"
     foreach ($step in $completed) {
         switch ($step) {
-            1 { $script:btnStep1.Text = "✅ 1. Configure Windows Settings" }
-            2 { $script:btnStep2.Text = "✅ 2. Review Windows Updates" }
-            3 { $script:btnStep3.Text = "✅ 3. Review Winget Updates" }
-            4 { $script:btnStep4.Text = "✅ 4. Launch CCleaner (Limited)" }
-            5 { $script:btnStep5.Text = "✅ 5. Revo Uninstaller (Disabled)" }
-            6 { $script:btnStep6.Text = "✅ 6. Apply Clinic Optimizations" }
-            7 { $script:btnStep7.Text = "✅ 7. Purge Temp & Cache (Selective)" }
+            1 { $script:btnStep1.Text = "âœ… 1. Configure Windows Settings" }
+            2 { $script:btnStep2.Text = "âœ… 2. Review Windows Updates" }
+            3 { $script:btnStep3.Text = "âœ… 3. Review Winget Updates" }
+            4 { $script:btnStep4.Text = "âœ… 4. Launch CCleaner (Limited)" }
+            5 { $script:btnStep5.Text = "âœ… 5. Revo Uninstaller (Disabled)" }
+            6 { $script:btnStep6.Text = "âœ… 6. Apply Clinic Optimizations" }
+            7 { $script:btnStep7.Text = "âœ… 7. Purge Temp & Cache (Selective)" }
         }
     }
 }
