@@ -279,6 +279,11 @@ function Run-Step1 {
 
         Write-Success "Settings applied. Restarting Explorer..."
         Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+        
+        # Give Explorer a moment to die, then force it back up
+        Start-Sleep -Seconds 2
+        if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe }
+        Start-Sleep -Seconds 1
 
         # SAVE STATE & UPDATE GUI
         Save-StepState 1
@@ -294,10 +299,16 @@ function Run-Step2 {
     Write-Step "Step 2: Windows Updates"
     Write-Log "   -> Opening Settings and starting interactive scan..." "DarkGray"
     Write-Log "   -> Script paused. Waiting for IT to close the Settings app..." "DarkGray"
-
+    
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
-        Start-Process "ms-settings:windowsupdate"
+        # Ensure the Windows Shell is fully loaded before calling a URI
+        if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { 
+            Start-Process explorer.exe
+            Start-Sleep -Seconds 2 
+        }
+
+        Start-Process "ms-settings:windowsupdate" -ErrorAction Stop
         Start-Sleep -Seconds 2
         Start-Process "usoclient" -ArgumentList "StartInteractiveScan" -WindowStyle Hidden -ErrorAction SilentlyContinue
         while (Get-Process -Name "SystemSettings" -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 1 }
