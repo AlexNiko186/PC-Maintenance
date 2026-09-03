@@ -134,7 +134,7 @@ goto :wait"
     Restart-Computer -Force
 }
 
-# function for the user to manually restart when needed
+# Function for the user to manually restart when needed
 function Restart-Computer-Manually {
     Schedule-SelfDeleteAndRestart
 }
