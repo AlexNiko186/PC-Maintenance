@@ -460,14 +460,9 @@ function Run-Step6 {
 }
 
 function Run-Step7 {
-    Write-Step "Step 7: Purging Temp, Cache, and Print Spooler"
+    Write-Step "Step 7: Purging Temp & Cache"
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
-        Write-Log "   -> Resetting Print Spooler cache..." "DarkGray"
-        Stop-Service -Name Spooler -Force -ErrorAction SilentlyContinue
-        Get-ChildItem -Path "C:\Windows\System32\spool\PRINTERS" -File -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
-        Start-Service -Name Spooler -ErrorAction SilentlyContinue
-
         Write-Log "   -> Purging system and user temp folders..." "DarkGray"
         $junkPaths = @(
             $env:TEMP, "C:\Windows\Temp", "C:\Windows\Prefetch",
@@ -478,9 +473,9 @@ function Run-Step7 {
         }
 
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-        Write-Success "All temporary data and stuck print queues destroyed."
+        Write-Success "All temporary data and cache destroyed."
 
-        $script:btnStep7.Text = "✅ 7. Purge Temp & Spooler"
+        $script:btnStep7.Text = "✅ 7. Purge Temp & Cache"
 
         $result = [System.Windows.Forms.MessageBox]::Show(
             "All optimization steps are completely finished! Would you like to restart the PC now to finalize everything?",
@@ -561,7 +556,7 @@ $script:btnStep3 = Add-GuiButton "3. Update Apps (Winget)" { Run-Step3 }
 $script:btnStep4 = Add-GuiButton "4. Launch CCleaner" { Run-Step4 }
 $script:btnStep5 = Add-GuiButton "5. Launch Revo Uninstaller" { Run-Step5 }
 $script:btnStep6 = Add-GuiButton "6. Apply Clinic Optimizations" { Run-Step6 }
-$script:btnStep7 = Add-GuiButton "7. Purge Temp & Spooler" { Run-Step7 }
+$script:btnStep7 = Add-GuiButton "7. Purge Temp & Cache" { Run-Step7 }
 
 # Add restart button at the bottom
 $btnRestart = New-Object System.Windows.Forms.Button
@@ -597,7 +592,7 @@ if ($completedSteps.Count -gt 0) {
     if ($completedSteps -contains 4) { $script:btnStep4.Text = "✅ 4. Launch CCleaner" }
     if ($completedSteps -contains 5) { $script:btnStep5.Text = "✅ 5. Launch Revo Uninstaller" }
     if ($completedSteps -contains 6) { $script:btnStep6.Text = "✅ 6. Apply Clinic Optimizations" }
-    if ($completedSteps -contains 7) { $script:btnStep7.Text = "✅ 7. Purge Temp & Spooler" }
+    if ($completedSteps -contains 7) { $script:btnStep7.Text = "✅ 7. Purge Temp & Cache" }
 }
 
 # Render the GUI
