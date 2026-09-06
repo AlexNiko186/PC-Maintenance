@@ -279,7 +279,7 @@ function Run-Step1 {
         Start-Sleep -Seconds 1
 
         Save-StepState 1
-        $script:btnStep1.Text = "✅ 1. Configure Windows Settings"
+        $script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings"
     })
 
     $SetForm.Controls.Add($btnApply)
@@ -307,7 +307,7 @@ function Run-Step2 {
 
         Write-Success "Windows Settings closed. Step logged as complete."
         Save-StepState 2
-        $script:btnStep2.Text = "✅ 2. Run Windows Updates"
+        $script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates"
     } catch { Write-ErrorMsg "Failed to process Windows Updates: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
@@ -365,7 +365,7 @@ function Run-Step3 {
 
         $UpdateForm.Close()
         Save-StepState 3
-        $script:btnStep3.Text = "✅ 3. Update Apps (Winget)"
+        $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)"
     })
 
     $UpdateForm.Add_Shown({
@@ -381,7 +381,7 @@ function Run-Step3 {
                 if ($cleanOut -match "No installed package found matching input criteria" -or $cleanOut -match "No available upgrades") {
                     $txtOutput.Text = "Scan Complete: All installed software is already up to date!"
                     Save-StepState 3
-                    $script:btnStep3.Text = "✅ 3. Update Apps (Winget)"
+                    $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)"
                 } else {
                     $txtOutput.Text = $cleanOut
                     $btnUpdate.Enabled = $true
@@ -405,7 +405,7 @@ function Run-Step4 {
             Start-Process $ccleanerExe -Wait
             Write-Success "CCleaner closed. Step logged as complete."
             Save-StepState 4
-            $script:btnStep4.Text = "✅ 4. Launch CCleaner"
+            $script:btnStep4.Text = "[ DONE ] 4. Launch CCleaner"
         } else { Write-WarningMsg "CCleaner not found at $ccleanerExe." }
     } catch { Write-ErrorMsg "Failed to launch CCleaner: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
@@ -422,7 +422,7 @@ function Run-Step5 {
             Start-Process $revoExe -Wait
             Write-Success "Revo Uninstaller closed. Step logged as complete."
             Save-StepState 5
-            $script:btnStep5.Text = "✅ 5. Launch Revo Uninstaller"
+            $script:btnStep5.Text = "[ DONE ] 5. Launch Revo Uninstaller"
         } else { Write-WarningMsg "Revo not found at $revoExe." }
     } catch { Write-ErrorMsg "Failed to launch Revo: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
@@ -442,7 +442,7 @@ function Run-Step6 {
         Write-Success "PC Optimized for performance and stability."
 
         Save-StepState 6
-        $script:btnStep6.Text = "✅ 6. Apply Clinic Optimizations"
+        $script:btnStep6.Text = "[ DONE ] 6. Apply Clinic Optimizations"
     } catch { Write-ErrorMsg "Error optimizing PC: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
@@ -462,7 +462,7 @@ function Run-Step7 {
 
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue
         Write-Success "All temporary data and cache destroyed."
-        $script:btnStep7.Text = "✅ 7. Purge Temp & Cache"
+        $script:btnStep7.Text = "[ DONE ] 7. Purge Temp & Cache"
 
         $result = [System.Windows.Forms.MessageBox]::Show(
             "All optimization steps are completely finished! Would you like to restart the PC now to finalize everything?",
@@ -480,13 +480,13 @@ function Run-Step7 {
 
 function Run-AllSteps {
     $btnRunAll.Enabled = $false
-    if ($script:btnStep1.Text -notmatch "✅") { Run-Step1 }
-    if ($script:btnStep2.Text -notmatch "✅") { Run-Step2 }
-    if ($script:btnStep3.Text -notmatch "✅") { Run-Step3 }
-    if ($script:btnStep4.Text -notmatch "✅") { Run-Step4 }
-    if ($script:btnStep5.Text -notmatch "✅") { Run-Step5 }
-    if ($script:btnStep6.Text -notmatch "✅") { Run-Step6 }
-    if ($script:btnStep7.Text -notmatch "✅") { Run-Step7 }
+    if ($script:btnStep1.Text -notmatch "DONE") { Run-Step1 }
+    if ($script:btnStep2.Text -notmatch "DONE") { Run-Step2 }
+    if ($script:btnStep3.Text -notmatch "DONE") { Run-Step3 }
+    if ($script:btnStep4.Text -notmatch "DONE") { Run-Step4 }
+    if ($script:btnStep5.Text -notmatch "DONE") { Run-Step5 }
+    if ($script:btnStep6.Text -notmatch "DONE") { Run-Step6 }
+    if ($script:btnStep7.Text -notmatch "DONE") { Run-Step7 }
     Write-Log "`n===============================" "DarkCyan" -Bold
     Write-Log " ALL PROCESSES COMPLETE!" "Green" -Bold
     Write-Log "===============================" "DarkCyan" -Bold
@@ -530,7 +530,7 @@ function Add-GuiButton([string]$Text, [scriptblock]$Action) {
     return $btn
 }
 
-$btnRunAll = Add-GuiButton "▶ RUN ALL STEPS" { Run-AllSteps }
+$btnRunAll = Add-GuiButton ">> RUN ALL STEPS" { Run-AllSteps }
 $btnRunAll.BackColor = [System.Drawing.Color]::LightGreen
 $btnRunAll.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 
@@ -543,7 +543,7 @@ $script:btnStep6 = Add-GuiButton "6. Apply Clinic Optimizations" { Run-Step6 }
 $script:btnStep7 = Add-GuiButton "7. Purge Temp & Cache" { Run-Step7 }
 
 $btnRestart = New-Object System.Windows.Forms.Button
-$btnRestart.Text = "🔄 Restart PC"
+$btnRestart.Text = "Restart PC"
 $btnRestart.Size = New-Object System.Drawing.Size(240, 35)
 $btnRestart.Location = New-Object System.Drawing.Point(15, 440)
 $btnRestart.Font = $BtnFont
@@ -560,7 +560,7 @@ $RichTextBox.BackColor = [System.Drawing.Color]::White
 $RichTextBox.ScrollBars = "Vertical"
 $MainForm.Controls.Add($RichTextBox)
 
-# --- CREATE DESKTOP SHORTCUT FOR EASY RESUMING ---
+# --- CREATE DESKTOP SHORTCUT FOR EASY RESUMING (RUN AS ADMIN) ---
 if ($MyInvocation.MyCommand.Path -and -not (Test-Path $ShortcutPath)) {
     try {
         $WshShell = New-Object -ComObject WScript.Shell
@@ -569,6 +569,11 @@ if ($MyInvocation.MyCommand.Path -and -not (Test-Path $ShortcutPath)) {
         $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
         $Shortcut.IconLocation = "powershell.exe,0"
         $Shortcut.Save()
+
+        # Force the shortcut to "Run as Administrator" via LinkFlags byte modification
+        $bytes = [System.IO.File]::ReadAllBytes($ShortcutPath)
+        $bytes[21] = $bytes[21] -bor 0x20
+        [System.IO.File]::WriteAllBytes($ShortcutPath, $bytes)
     } catch {}
 }
 
@@ -581,13 +586,13 @@ Write-Log "Note: The script will pause while external tools are open.`n" "DarkGr
 $completedSteps = Get-StepState
 if ($completedSteps.Count -gt 0) {
     Write-Log "   -> Resuming session. Marking completed steps..." "DarkOrange" -Bold
-    if ($completedSteps -contains 1) { $script:btnStep1.Text = "✅ 1. Configure Windows Settings" }
-    if ($completedSteps -contains 2) { $script:btnStep2.Text = "✅ 2. Run Windows Updates" }
-    if ($completedSteps -contains 3) { $script:btnStep3.Text = "✅ 3. Update Apps (Winget)" }
-    if ($completedSteps -contains 4) { $script:btnStep4.Text = "✅ 4. Launch CCleaner" }
-    if ($completedSteps -contains 5) { $script:btnStep5.Text = "✅ 5. Launch Revo Uninstaller" }
-    if ($completedSteps -contains 6) { $script:btnStep6.Text = "✅ 6. Apply Clinic Optimizations" }
-    if ($completedSteps -contains 7) { $script:btnStep7.Text = "✅ 7. Purge Temp & Cache" }
+    if ($completedSteps -contains 1) { $script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings" }
+    if ($completedSteps -contains 2) { $script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates" }
+    if ($completedSteps -contains 3) { $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)" }
+    if ($completedSteps -contains 4) { $script:btnStep4.Text = "[ DONE ] 4. Launch CCleaner" }
+    if ($completedSteps -contains 5) { $script:btnStep5.Text = "[ DONE ] 5. Launch Revo Uninstaller" }
+    if ($completedSteps -contains 6) { $script:btnStep6.Text = "[ DONE ] 6. Apply Clinic Optimizations" }
+    if ($completedSteps -contains 7) { $script:btnStep7.Text = "[ DONE ] 7. Purge Temp & Cache" }
 }
 
 # Render the GUI
