@@ -104,14 +104,24 @@ function Get-StepState {
 }
 
 function Schedule-SelfDeleteAndRestart {
+    # Delete the desktop shortcut immediately
     if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
     
+    # Create a highly reliable self-deleting batch file in the Windows Startup folder
     $scriptPath = $MyInvocation.MyCommand.Path
     if ($scriptPath) {
         $scriptDir = Split-Path $scriptPath
         $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', ''
-        $delCmd = "cmd.exe /c del /q /f `"$scriptDir\$baseName*.ps1`""
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce" -Name "ClinicOptimizerCleanup" -Value $delCmd -Force
+        $startupFolder = [Environment]::GetFolderPath("Startup")
+        $batFile = Join-Path $startupFolder "ClinicOptimizer_Cleanup.bat"
+        
+        $batContent = "@echo off
+timeout /t 5 /nobreak >nul
+del /q /f `"$scriptDir\$baseName*.ps1`"
+del /q /f `"%USERPROFILE%\Desktop\Resume PC Maintenance.lnk`"
+del /q /f `"%~f0`""
+        
+        Set-Content -Path $batFile -Value $batContent -Encoding ASCII -Force
     }
 
     Write-WarningMsg "Scheduling final cleanup and restarting PC..."
@@ -190,10 +200,30 @@ function Run-Step1 {
     $cmbWinPerm = Add-SettingRow "Windows Permissions:" "Disabled (Comodo Standard)" "Turns off Ad ID, Activity History, App Launch tracking, and Tailored Experiences." "Windows Default (Enabled)" "Leaves standard Windows behavior tracking active." 0 $curWinPerm
     $cmbGaming = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming
 
+    # Set All Standard Button
+    $btnSetStandard = New-Object System.Windows.Forms.Button
+    $btnSetStandard.Text = "Set All Standard"
+    $btnSetStandard.Size = New-Object System.Drawing.Size(230, 40)
+    $btnSetStandard.Location = New-Object System.Drawing.Point(20, ($script:yOffset + 10))
+    $btnSetStandard.BackColor = [System.Drawing.Color]::LightYellow
+    $btnSetStandard.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnSetStandard.Add_Click({
+        $cmbTheme.SelectedIndex = 1
+        $cmbTaskbar.SelectedIndex = 0
+        $cmbNotif.SelectedIndex = 0
+        $cmbRDP.SelectedIndex = 0
+        $cmbStorage.SelectedIndex = 1
+        $cmbPrivacy.SelectedIndex = 0
+        $cmbWinPerm.SelectedIndex = 0
+        $cmbGaming.SelectedIndex = 0
+    })
+    $SetForm.Controls.Add($btnSetStandard)
+
+    # Apply Settings Button
     $btnApply = New-Object System.Windows.Forms.Button
     $btnApply.Text = "Apply Settings"
     $btnApply.Size = New-Object System.Drawing.Size(250, 40)
-    $btnApply.Location = New-Object System.Drawing.Point(125, ($script:yOffset + 10))
+    $btnApply.Location = New-Object System.Drawing.Point(260, ($script:yOffset + 10))
     $btnApply.BackColor = [System.Drawing.Color]::LightBlue
     $btnApply.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 
