@@ -88,7 +88,8 @@ function Get-RegKey ([string]$Path, [string]$Name, $Default) {
 # --- TRACKING & CLEANUP MECHANISMS ---
 $StateDir = "C:\ITDepartment\Step Check"
 $StateFile = Join-Path $StateDir "progress.txt"
-$ShortcutPath = "$env:USERPROFILE\Desktop\Resume PC Maintenance.lnk"
+$PublicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
+$ShortcutPath = Join-Path $PublicDesktop "Resume PC Maintenance.lnk"
 
 function Save-StepState ([int]$StepNum) {
     if (-not (Test-Path $StateDir)) { New-Item -Path $StateDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null }
@@ -107,18 +108,18 @@ function Schedule-SelfDeleteAndRestart {
     # Delete the desktop shortcut immediately
     if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
     
-    # Create a highly reliable self-deleting batch file in the Windows Startup folder
+    # Create a trace-free batch file in the All Users Startup folder
     $scriptPath = $MyInvocation.MyCommand.Path
     if ($scriptPath) {
         $scriptDir = Split-Path $scriptPath
         $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', ''
-        $startupFolder = [Environment]::GetFolderPath("Startup")
+        $startupFolder = [Environment]::GetFolderPath("CommonStartup")
         $batFile = Join-Path $startupFolder "ClinicOptimizer_Cleanup.bat"
         
         $batContent = "@echo off
 timeout /t 5 /nobreak >nul
 del /q /f `"$scriptDir\$baseName*.ps1`"
-del /q /f `"%USERPROFILE%\Desktop\Resume PC Maintenance.lnk`"
+del /q /f `"$ShortcutPath`"
 del /q /f `"%~f0`""
         
         Set-Content -Path $batFile -Value $batContent -Encoding ASCII -Force
