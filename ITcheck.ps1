@@ -1,6 +1,6 @@
 # =========================================================================
 # ClinicOptimizer-GUI.ps1
-# Interactive GUI Deployment Script with Auto-Resume State Tracking
+# Optimized Interactive Deployment Script with Auto-Resume Tracking
 # =========================================================================
 
 # --- Pre-flight Check: Ensure Admin Rights ---
@@ -50,8 +50,7 @@ function Write-Log ([string]$Message, [string]$Color = "Black", [switch]$Bold) {
     $RichTextBox.SelectionStart = $RichTextBox.TextLength
     $RichTextBox.SelectionLength = 0
     $RichTextBox.SelectionColor = [System.Drawing.Color]::FromName($Color)
-    if ($Bold) { $RichTextBox.SelectionFont = New-Object System.Drawing.Font($RichTextBox.Font, [System.Drawing.FontStyle]::Bold) }
-    else { $RichTextBox.SelectionFont = New-Object System.Drawing.Font($RichTextBox.Font, [System.Drawing.FontStyle]::Regular) }
+    $RichTextBox.SelectionFont = New-Object System.Drawing.Font($RichTextBox.Font, $(if ($Bold) { [System.Drawing.FontStyle]::Bold } else { [System.Drawing.FontStyle]::Regular }))
     $RichTextBox.AppendText("$Message`n")
     $RichTextBox.ScrollToCaret()
     [System.Windows.Forms.Application]::DoEvents()
@@ -62,14 +61,12 @@ function Write-Success ([string]$Message) { Write-Log "[+] $Message" "Green" }
 function Write-ErrorMsg ([string]$Message) { Write-Log "[-] $Message" "Red" }
 function Write-WarningMsg ([string]$Message) { Write-Log "[!] $Message" "DarkOrange" }
 
-function Set-RegKey {
-    param ([string]$Path, [string]$Name, $Value, [string]$Type = "DWord")
+function Set-RegKey ([string]$Path, [string]$Name, $Value, [string]$Type = "DWord") {
     try {
         if (-not (Test-Path $Path)) { New-Item -Path $Path -Force -ErrorAction Stop | Out-Null }
         Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -ErrorAction Stop
     } catch {
         try {
-            # Bypass TrustedInstaller to force protected keys
             $acl = Get-Acl $Path
             $adminGroup = New-Object System.Security.Principal.NTAccount("Administrators")
             $acl.SetOwner($adminGroup)
@@ -81,49 +78,21 @@ function Set-RegKey {
     }
 }
 
-function Get-RegKey {
-    param ([string]$Path, [string]$Name, $Default)
+function Get-RegKey ([string]$Path, [string]$Name, $Default) {
     try {
         $val = (Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop).$Name
-        if ($null -eq $val) { return $Default }
-        return $val
+        return if ($null -eq $val) { $Default } else { $val }
     } catch { return $Default }
 }
 
-# --- SELF-DELETION AFTER RESTART ---
-function Schedule-SelfDeleteAndRestart {
-    $scriptPath = $MyInvocation.MyCommand.Path
-    $batPath = "$env:TEMP\delete_self.bat"
-
-    # Create batch file that waits for script to exit then deletes it
-    $batContent = "@echo off
-:wait
-timeout /t 2 >nul
-if exist `"$scriptPath`" (
-    del `"$scriptPath`"
-) else (
-    goto :eof
-)
-goto :wait"
-
-    Set-Content -Path $batPath -Value $batContent -Encoding ASCII -Force
-    Start-Process -FilePath $batPath -WindowStyle Hidden -ErrorAction SilentlyContinue | Out-Null
-
-    # Restart the computer
-    Write-WarningMsg "Scheduling self-deletion and restarting PC..."
-    Start-Sleep -Seconds 2
-    Restart-Computer -Force
-}
-
-# --- INDIVIDUAL STEP TRACKING MECHANISM ---
+# --- TRACKING & CLEANUP MECHANISMS ---
 $StateDir = "C:\ITDepartment\Step Check"
 $StateFile = Join-Path $StateDir "progress.txt"
+$ShortcutPath = "$env:USERPROFILE\Desktop\Resume PC Maintenance.lnk"
 
 function Save-StepState ([int]$StepNum) {
     if (-not (Test-Path $StateDir)) { New-Item -Path $StateDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null }
-
-    $existing = @()
-    if (Test-Path $StateFile) { $existing = Get-Content $StateFile -ErrorAction SilentlyContinue }
+    $existing = if (Test-Path $StateFile) { Get-Content $StateFile -ErrorAction SilentlyContinue } else { @() }
     if ($existing -notcontains $StepNum) { Add-Content -Path $StateFile -Value $StepNum -Force -ErrorAction SilentlyContinue }
 }
 
@@ -134,9 +103,26 @@ function Get-StepState {
     return @()
 }
 
-# Function for the user to manually restart when needed
+function Schedule-SelfDeleteAndRestart {
+    if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
+    
+    $scriptPath = $MyInvocation.MyCommand.Path
+    if ($scriptPath) {
+        $scriptDir = Split-Path $scriptPath
+        $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', ''
+        $delCmd = "cmd.exe /c del /q /f `"$scriptDir\$baseName*.ps1`""
+        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce" -Name "ClinicOptimizerCleanup" -Value $delCmd -Force
+    }
+
+    Write-WarningMsg "Scheduling final cleanup and restarting PC..."
+    Start-Sleep -Seconds 2
+    Restart-Computer -Force
+}
+
 function Restart-Computer-Manually {
-    Schedule-SelfDeleteAndRestart
+    Write-WarningMsg "Restarting PC to apply changes..."
+    Start-Sleep -Seconds 2
+    Restart-Computer -Force
 }
 
 # ==========================================
@@ -148,7 +134,7 @@ function Run-Step1 {
 
     $SetForm = New-Object System.Windows.Forms.Form
     $SetForm.Text = "Configure Windows Settings"
-    $SetForm.Size = New-Object System.Drawing.Size(540, 830) # Adjusted height to remove Wi-Fi/BT
+    $SetForm.Size = New-Object System.Drawing.Size(540, 830)
     $SetForm.StartPosition = "CenterParent"
     $SetForm.FormBorderStyle = "FixedDialog"
     $SetForm.MaximizeBox = $false
@@ -175,11 +161,8 @@ function Run-Step1 {
         $SetForm.Controls.Add($lblDesc)
 
         $cmb.Add_SelectedIndexChanged({
-            if ($this.SelectedIndex -eq 0) { $lblDesc.Text = $Opt0_Desc }
-            else { $lblDesc.Text = $Opt1_Desc }
-
-            if ($this.SelectedIndex -eq $StandardIndex) { $lblDesc.ForeColor = [System.Drawing.Color]::Blue }
-            else { $lblDesc.ForeColor = [System.Drawing.Color]::Red }
+            $lblDesc.Text = if ($this.SelectedIndex -eq 0) { $Opt0_Desc } else { $Opt1_Desc }
+            $lblDesc.ForeColor = if ($this.SelectedIndex -eq $StandardIndex) { [System.Drawing.Color]::Blue } else { [System.Drawing.Color]::Red }
         }.GetNewClosure())
 
         $cmb.SelectedIndex = $CurrentIndex
@@ -187,41 +170,25 @@ function Run-Step1 {
         return $cmb
     }
 
-    # --- READ CURRENT SYSTEM SETTINGS ---
-    $curTheme = Get-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" "AppsUseLightTheme" 1
-    if ($curTheme -ne 0) { $curTheme = 1 }
+    # Read Current States (Defaults standard if undefined)
+    $curTheme = if ((Get-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" "AppsUseLightTheme" 1) -ne 0) { 1 } else { 0 }
+    $curTaskbar = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 0) -ne 0) { 1 } else { 0 }
+    $curNotif = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" 1) -ne 0) { 1 } else { 0 }
+    $curRDP = if ((Get-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 1) -ne 0) { 1 } else { 0 }
+    $curStorage = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "01" 0) -ne 0) { 1 } else { 0 }
+    $curPrivacy = if ((Get-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 1) -eq 0) { 0 } else { 1 }
+    $curWinPerm = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" 1) -eq 0) { 0 } else { 1 }
+    $curGaming = if ((Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1) -ne 0) { 1 } else { 0 }
 
-    $curTaskbar = Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 0
-    if ($curTaskbar -ne 0) { $curTaskbar = 1 }
-
-    $curNotif = Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" 1
-    if ($curNotif -ne 0) { $curNotif = 1 }
-
-    $curRDP = Get-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 1
-    if ($curRDP -ne 0) { $curRDP = 1 }
-
-    $curStorage = Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "01" 0
-    if ($curStorage -ne 0) { $curStorage = 1 }
-
-    $curPrivacyVal = Get-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 1
-    $curPrivacy = if ($curPrivacyVal -eq 0) { 0 } else { 1 }
-
-    $curWinPermVal = Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" 1
-    $curWinPerm = if ($curWinPermVal -eq 0) { 0 } else { 1 }
-
-    $curGaming = Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1
-    if ($curGaming -ne 0) { $curGaming = 1 }
-
-    # --- BUILD THE DYNAMIC MENUS ---
+    # Build Menus
     $cmbTheme = Add-SettingRow "System Theme:" "Dark Mode" "Sets Windows apps and system background to Dark Mode." "Light Mode (Comodo Standard)" "Sets standard Windows app and system background colors." 1 $curTheme
-    $cmbTaskbar = Add-SettingRow "Taskbar Alignment:" "Left (Comodo Standard)" "Aligns taskbar left and hides Widgets, Chat, and Search box." "Center" "Aligns taskbar to the center and leaves Widgets/Search enabled." 0 $curTaskbar
+    $cmbTaskbar = Add-SettingRow "Taskbar Alignment:" "Left (Comodo Standard)" "Aligns taskbar left, hides Widgets/Chat, but leaves the Search Box visible." "Center" "Aligns taskbar to the center and leaves Widgets/Search enabled." 0 $curTaskbar
     $cmbNotif = Add-SettingRow "Notifications:" "Disabled (Comodo Standard)" "Turns off notification center tracking and toast pop-ups." "Enabled" "Leaves Windows notifications and toast pop-ups turned on." 0 $curNotif
     $cmbRDP = Add-SettingRow "Remote Desktop:" "Enabled (Comodo Standard)" "Allows RDP access and securely configures Windows Firewall." "Disabled" "Blocks incoming Remote Desktop connections to this PC." 0 $curRDP
     $cmbStorage = Add-SettingRow "Storage Sense:" "Disabled" "Turns off automated Storage Sense background cleanup." "Enabled (Comodo Standard)" "Auto-deletes Recycle Bin (1 Day) and Downloads folder (14 Days)." 1 $curStorage
     $cmbPrivacy = Add-SettingRow "Privacy Tracking:" "Secure/Disabled (Comodo Standard)" "Disables diagnostic data, search history, speech targeting, & inking." "Windows Default (Enabled)" "Allows Microsoft to collect telemetry, inking, and diagnostic data." 0 $curPrivacy
     $cmbWinPerm = Add-SettingRow "Windows Permissions:" "Disabled (Comodo Standard)" "Turns off Ad ID, Activity History, App Launch tracking, and Tailored Experiences." "Windows Default (Enabled)" "Leaves standard Windows behavior tracking active." 0 $curWinPerm
     $cmbGaming = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming
-    
 
     $btnApply = New-Object System.Windows.Forms.Button
     $btnApply.Text = "Apply Settings"
@@ -238,22 +205,14 @@ function Run-Step1 {
         $themePath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"
         Set-RegKey $themePath "AppsUseLightTheme" $idxTheme; Set-RegKey $themePath "SystemUsesLightTheme" $idxTheme
 
-       $idxTaskbar = $cmbTaskbar.SelectedIndex
+        $idxTaskbar = $cmbTaskbar.SelectedIndex
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" $idxTaskbar
-        if ($idxTaskbar -eq 0) { 
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 0
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 0
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 
-        } 
-        else { 
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 1
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 1
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 
-        }
-        
+        if ($idxTaskbar -eq 0) { Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 0; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 0; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 }
+        else { Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 1; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 1; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 }
+
+        $idxNotif = $cmbNotif.SelectedIndex
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" $idxNotif
-        $disableCenter = if ($idxNotif -eq 0) { 1 } else { 0 }
-        Set-RegKey "HKCU:\Software\Policies\Microsoft\Windows\Explorer" "DisableNotificationCenter" $disableCenter
+        Set-RegKey "HKCU:\Software\Policies\Microsoft\Windows\Explorer" "DisableNotificationCenter" $(if ($idxNotif -eq 0) { 1 } else { 0 })
 
         $idxRDP = $cmbRDP.SelectedIndex
         Set-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" $idxRDP
@@ -277,22 +236,18 @@ function Run-Step1 {
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Start_TrackProgs" $idxWinPerm
         Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" "EnableActivityFeed" $idxWinPerm
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy" "TailoredExperiencesWithDiagnosticDataEnabled" $idxWinPerm
-        $optOut = if ($idxWinPerm -eq 0) { 1 } else { 0 }
-        Set-RegKey "HKCU:\Control Panel\International\User Profile" "HttpAcceptLanguageOptOut" $optOut
+        Set-RegKey "HKCU:\Control Panel\International\User Profile" "HttpAcceptLanguageOptOut" $(if ($idxWinPerm -eq 0) { 1 } else { 0 })
 
         $idxGaming = $cmbGaming.SelectedIndex
-        Set-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" $idxGaming; Set-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" "AppCaptureEnabled" $idxGaming; Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" $idxGaming; Set-RegKey "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" $idxGaming
-
+        Set-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" $idxGaming; Set-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" "AppCaptureEnabled" $idxGaming
+        Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" $idxGaming; Set-RegKey "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" $idxGaming
 
         Write-Success "Settings applied. Restarting Explorer..."
         Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
-        
-        # Give Explorer a moment to die, then force it back up
         Start-Sleep -Seconds 2
         if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe }
         Start-Sleep -Seconds 1
 
-        # SAVE STATE & UPDATE GUI
         Save-StepState 1
         $script:btnStep1.Text = "✅ 1. Configure Windows Settings"
     })
@@ -305,11 +260,9 @@ function Run-Step1 {
 function Run-Step2 {
     Write-Step "Step 2: Windows Updates"
     Write-Log "   -> Opening Settings and starting interactive scan..." "DarkGray"
-    Write-Log "   -> Script paused. Waiting for IT to close the Settings app..." "DarkGray"
     
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
-        # Ensure the Windows Shell is fully loaded before calling a URI
         if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { 
             Start-Process explorer.exe
             Start-Sleep -Seconds 2 
@@ -318,10 +271,11 @@ function Run-Step2 {
         Start-Process "ms-settings:windowsupdate" -ErrorAction Stop
         Start-Sleep -Seconds 2
         Start-Process "usoclient" -ArgumentList "StartInteractiveScan" -WindowStyle Hidden -ErrorAction SilentlyContinue
+        
+        Write-Log "   -> Script paused. Waiting for IT to close the Settings app..." "DarkGray"
         while (Get-Process -Name "SystemSettings" -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 1 }
 
         Write-Success "Windows Settings closed. Step logged as complete."
-
         Save-StepState 2
         $script:btnStep2.Text = "✅ 2. Run Windows Updates"
     } catch { Write-ErrorMsg "Failed to process Windows Updates: $_" }
@@ -365,6 +319,9 @@ function Run-Step3 {
     $UpdateForm.Controls.Add($btnCancel)
 
     $btnUpdate.Add_Click({
+        $confirm = [System.Windows.Forms.MessageBox]::Show("WARNING: Winget will update ALL out-of-date software.`n`nIf it updates your remote access tool (e.g., AnyDesk, TeamViewer, Splashtop), YOUR REMOTE CONNECTION WILL DROP.`n`nDo you want to proceed?", "Remote Connection Warning", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
+        if ($confirm -eq "No") { return }
+
         $btnUpdate.Enabled = $false; $btnCancel.Enabled = $false
         $txtOutput.Text += "`n`nStarting silent background installation... Please wait."
         $UpdateForm.Update()
@@ -377,7 +334,6 @@ function Run-Step3 {
         else { Write-WarningMsg "Winget completed with exit code: $($wingetProc.ExitCode). Some apps may require a reboot." }
 
         $UpdateForm.Close()
-
         Save-StepState 3
         $script:btnStep3.Text = "✅ 3. Update Apps (Winget)"
     })
@@ -394,8 +350,6 @@ function Run-Step3 {
 
                 if ($cleanOut -match "No installed package found matching input criteria" -or $cleanOut -match "No available upgrades") {
                     $txtOutput.Text = "Scan Complete: All installed software is already up to date!"
-
-                    # Mark step as completed if already updated
                     Save-StepState 3
                     $script:btnStep3.Text = "✅ 3. Update Apps (Winget)"
                 } else {
@@ -420,7 +374,6 @@ function Run-Step4 {
         if (Test-Path $ccleanerExe) {
             Start-Process $ccleanerExe -Wait
             Write-Success "CCleaner closed. Step logged as complete."
-
             Save-StepState 4
             $script:btnStep4.Text = "✅ 4. Launch CCleaner"
         } else { Write-WarningMsg "CCleaner not found at $ccleanerExe." }
@@ -438,7 +391,6 @@ function Run-Step5 {
         if (Test-Path $revoExe) {
             Start-Process $revoExe -Wait
             Write-Success "Revo Uninstaller closed. Step logged as complete."
-
             Save-StepState 5
             $script:btnStep5.Text = "✅ 5. Launch Revo Uninstaller"
         } else { Write-WarningMsg "Revo not found at $revoExe." }
@@ -480,7 +432,6 @@ function Run-Step7 {
 
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue
         Write-Success "All temporary data and cache destroyed."
-
         $script:btnStep7.Text = "✅ 7. Purge Temp & Cache"
 
         $result = [System.Windows.Forms.MessageBox]::Show(
@@ -490,18 +441,15 @@ function Run-Step7 {
             [System.Windows.Forms.MessageBoxIcon]::Information
         )
         if ($result -eq "Yes") {
-            # Cleanup the Step Check folder permanently ONLY if they say yes
             if (Test-Path $StateDir) { Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue }
             Schedule-SelfDeleteAndRestart
         }
-
     } catch { Write-ErrorMsg "Error during final cleanup: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
 function Run-AllSteps {
     $btnRunAll.Enabled = $false
-    # Only run steps that don't have a checkmark yet
     if ($script:btnStep1.Text -notmatch "✅") { Run-Step1 }
     if ($script:btnStep2.Text -notmatch "✅") { Run-Step2 }
     if ($script:btnStep3.Text -notmatch "✅") { Run-Step3 }
@@ -520,7 +468,7 @@ function Run-AllSteps {
 # ==========================================
 $MainForm = New-Object System.Windows.Forms.Form
 $MainForm.Text = "Clinic PC Maintenance Utility"
-$MainForm.Size = New-Object System.Drawing.Size(750, 520) # Increased height to accommodate restart button
+$MainForm.Size = New-Object System.Drawing.Size(750, 520)
 $MainForm.StartPosition = "CenterScreen"
 $MainForm.FormBorderStyle = "FixedDialog"
 $MainForm.MaximizeBox = $false
@@ -564,11 +512,10 @@ $script:btnStep5 = Add-GuiButton "5. Launch Revo Uninstaller" { Run-Step5 }
 $script:btnStep6 = Add-GuiButton "6. Apply Clinic Optimizations" { Run-Step6 }
 $script:btnStep7 = Add-GuiButton "7. Purge Temp & Cache" { Run-Step7 }
 
-# Add restart button at the bottom
 $btnRestart = New-Object System.Windows.Forms.Button
 $btnRestart.Text = "🔄 Restart PC"
 $btnRestart.Size = New-Object System.Drawing.Size(240, 35)
-$btnRestart.Location = New-Object System.Drawing.Point(15, 440) # Below the panel
+$btnRestart.Location = New-Object System.Drawing.Point(15, 440)
 $btnRestart.Font = $BtnFont
 $btnRestart.BackColor = [System.Drawing.Color]::LightPink
 $btnRestart.Add_Click({ Restart-Computer-Manually })
@@ -583,9 +530,21 @@ $RichTextBox.BackColor = [System.Drawing.Color]::White
 $RichTextBox.ScrollBars = "Vertical"
 $MainForm.Controls.Add($RichTextBox)
 
+# --- CREATE DESKTOP SHORTCUT FOR EASY RESUMING ---
+if ($MyInvocation.MyCommand.Path -and -not (Test-Path $ShortcutPath)) {
+    try {
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+        $Shortcut.TargetPath = "powershell.exe"
+        $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$($MyInvocation.MyCommand.Path)`""
+        $Shortcut.IconLocation = "powershell.exe,0"
+        $Shortcut.Save()
+    } catch {}
+}
+
 Write-Log "Welcome to the Clinic PC Maintenance Utility." "DarkCyan" -Bold
 Write-Log "Click an individual step or 'RUN ALL STEPS'." "Black"
-Write-Log "Use the restart button below when you need to reboot the system (script will delete itself after restart)." "DarkGray"
+Write-Log "Use the restart button below when you need to reboot the system." "DarkGray"
 Write-Log "Note: The script will pause while external tools are open.`n" "DarkGray"
 
 # --- CHECK FOR PREVIOUS PROGRESS UPON LAUNCH ---
