@@ -100,6 +100,16 @@ function Save-StepState ([int]$StepNum) {
 
 function Get-StepState {
     if (Test-Path $StateFile) {
+        $fileDate = (Get-Item $StateFile).LastWriteTime.Date
+        $todayDate = (Get-Date).Date
+        
+        # If the tracking file is from a previous day, nuke it and start over
+        if ($fileDate -lt $todayDate) {
+            Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue
+            if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
+            return @()
+        }
+        
         return @(Get-Content $StateFile -ErrorAction SilentlyContinue | Where-Object { $_ -match '\d' } | ForEach-Object { [int]$_ })
     }
     return @()
