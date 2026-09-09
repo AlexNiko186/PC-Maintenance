@@ -108,21 +108,18 @@ function Schedule-SelfDeleteAndRestart {
     # Delete the desktop shortcut immediately
     if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
     
-    # Create a trace-free batch file in the All Users Startup folder
+    # Create a bulletproof Scheduled Task running as SYSTEM to delete the script on startup
     $scriptPath = $MyInvocation.MyCommand.Path
     if ($scriptPath) {
         $scriptDir = Split-Path $scriptPath
         $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', ''
-        $startupFolder = [Environment]::GetFolderPath("CommonStartup")
-        $batFile = Join-Path $startupFolder "ClinicOptimizer_Cleanup.bat"
         
-        $batContent = "@echo off
-timeout /t 5 /nobreak >nul
-del /q /f `"$scriptDir\$baseName*.ps1`"
-del /q /f `"$ShortcutPath`"
-del /q /f `"%~f0`""
+        # Uses 'ping' as a silent 6-second delay (timeout fails in hidden background tasks)
+        $delArg = "/c ping 127.0.0.1 -n 6 >nul & del /q /f `"$scriptDir\$baseName*.ps1`" & del /q /f `"$ShortcutPath`" & schtasks /delete /tn `"ClinicCleanup`" /f"
         
-        Set-Content -Path $batFile -Value $batContent -Encoding ASCII -Force
+        $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument $delArg
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        Register-ScheduledTask -TaskName "ClinicCleanup" -Action $action -Trigger $trigger -User "NT AUTHORITY\SYSTEM" -RunLevel Highest -Force | Out-Null
     }
 
     Write-WarningMsg "Scheduling final cleanup and restarting PC..."
