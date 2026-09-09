@@ -81,7 +81,8 @@ function Set-RegKey ([string]$Path, [string]$Name, $Value, [string]$Type = "DWor
 function Get-RegKey ([string]$Path, [string]$Name, $Default) {
     try {
         $val = (Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop).$Name
-        return if ($null -eq $val) { $Default } else { $val }
+        if ($null -eq $val) { return $Default }
+        return [int]$val
     } catch { return $Default }
 }
 
@@ -102,29 +103,6 @@ function Get-StepState {
         return @(Get-Content $StateFile -ErrorAction SilentlyContinue | Where-Object { $_ -match '\d' } | ForEach-Object { [int]$_ })
     }
     return @()
-}
-
-function Schedule-SelfDeleteAndRestart {
-    # Delete the desktop shortcut immediately
-    if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
-    
-    # Create a bulletproof Scheduled Task running as SYSTEM to delete the script on startup
-    $scriptPath = $MyInvocation.MyCommand.Path
-    if ($scriptPath) {
-        $scriptDir = Split-Path $scriptPath
-        $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', ''
-        
-        # Uses 'ping' as a silent 6-second delay (timeout fails in hidden background tasks)
-        $delArg = "/c ping 127.0.0.1 -n 6 >nul & del /q /f `"$scriptDir\$baseName*.ps1`" & del /q /f `"$ShortcutPath`" & schtasks /delete /tn `"ClinicCleanup`" /f"
-        
-        $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument $delArg
-        $trigger = New-ScheduledTaskTrigger -AtStartup
-        Register-ScheduledTask -TaskName "ClinicCleanup" -Action $action -Trigger $trigger -User "NT AUTHORITY\SYSTEM" -RunLevel Highest -Force | Out-Null
-    }
-
-    Write-WarningMsg "Scheduling final cleanup and restarting PC..."
-    Start-Sleep -Seconds 2
-    Restart-Computer -Force
 }
 
 function Restart-Computer-Manually {
@@ -178,27 +156,27 @@ function Run-Step1 {
         return $cmb
     }
 
-    # Read Current States (Defaults standard if undefined)
-    $curTheme = if ((Get-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" "AppsUseLightTheme" 1) -ne 0) { 1 } else { 0 }
-    $curTaskbar = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 0) -ne 0) { 1 } else { 0 }
-    $curNotif = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" 1) -ne 0) { 1 } else { 0 }
-    $curRDP = if ((Get-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 1) -ne 0) { 1 } else { 0 }
-    $curStorage = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "01" 0) -ne 0) { 1 } else { 0 }
-    $curPrivacy = if ((Get-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 1) -eq 0) { 0 } else { 1 }
+    # --- READ CURRENT SYSTEM SETTINGS (With accurate Windows OS Defaults) ---
+    $curTheme   = if ((Get-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" "AppsUseLightTheme" 1) -eq 0) { 0 } else { 1 }
+    $curTaskbar = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 1) -eq 0) { 0 } else { 1 }
+    $curNotif   = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" 1) -eq 0) { 0 } else { 1 }
+    $curRDP     = if ((Get-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 1) -eq 0) { 0 } else { 1 }
+    $curStorage = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "01" 0) -eq 0) { 0 } else { 1 }
+    $curPrivacy = if ((Get-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 3) -eq 0) { 0 } else { 1 }
     $curWinPerm = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" 1) -eq 0) { 0 } else { 1 }
-    $curGaming = if ((Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1) -ne 0) { 1 } else { 0 }
+    $curGaming  = if ((Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1) -eq 0) { 0 } else { 1 }
 
-    # Build Menus
-    $cmbTheme = Add-SettingRow "System Theme:" "Dark Mode" "Sets Windows apps and system background to Dark Mode." "Light Mode (Comodo Standard)" "Sets standard Windows app and system background colors." 1 $curTheme
+    # --- BUILD THE DYNAMIC MENUS ---
+    $cmbTheme   = Add-SettingRow "System Theme:" "Dark Mode" "Sets Windows apps and system background to Dark Mode." "Light Mode (Comodo Standard)" "Sets standard Windows app and system background colors." 1 $curTheme
     $cmbTaskbar = Add-SettingRow "Taskbar Alignment:" "Left (Comodo Standard)" "Aligns taskbar left, hides Widgets/Chat, but leaves the Search Box visible." "Center" "Aligns taskbar to the center and leaves Widgets/Search enabled." 0 $curTaskbar
-    $cmbNotif = Add-SettingRow "Notifications:" "Disabled (Comodo Standard)" "Turns off notification center tracking and toast pop-ups." "Enabled" "Leaves Windows notifications and toast pop-ups turned on." 0 $curNotif
-    $cmbRDP = Add-SettingRow "Remote Desktop:" "Enabled (Comodo Standard)" "Allows RDP access and securely configures Windows Firewall." "Disabled" "Blocks incoming Remote Desktop connections to this PC." 0 $curRDP
+    $cmbNotif   = Add-SettingRow "Notifications:" "Disabled (Comodo Standard)" "Turns off notification center tracking and toast pop-ups." "Enabled" "Leaves Windows notifications and toast pop-ups turned on." 0 $curNotif
+    $cmbRDP     = Add-SettingRow "Remote Desktop:" "Enabled (Comodo Standard)" "Allows RDP access and securely configures Windows Firewall." "Disabled" "Blocks incoming Remote Desktop connections to this PC." 0 $curRDP
     $cmbStorage = Add-SettingRow "Storage Sense:" "Disabled" "Turns off automated Storage Sense background cleanup." "Enabled (Comodo Standard)" "Auto-deletes Recycle Bin (1 Day) and Downloads folder (14 Days)." 1 $curStorage
     $cmbPrivacy = Add-SettingRow "Privacy Tracking:" "Secure/Disabled (Comodo Standard)" "Disables diagnostic data, search history, speech targeting, & inking." "Windows Default (Enabled)" "Allows Microsoft to collect telemetry, inking, and diagnostic data." 0 $curPrivacy
     $cmbWinPerm = Add-SettingRow "Windows Permissions:" "Disabled (Comodo Standard)" "Turns off Ad ID, Activity History, App Launch tracking, and Tailored Experiences." "Windows Default (Enabled)" "Leaves standard Windows behavior tracking active." 0 $curWinPerm
-    $cmbGaming = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming
+    $cmbGaming  = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming
 
-    # Set All Standard Button
+    # --- SET ALL STANDARD BUTTON ---
     $btnSetStandard = New-Object System.Windows.Forms.Button
     $btnSetStandard.Text = "Set All Standard"
     $btnSetStandard.Size = New-Object System.Drawing.Size(230, 40)
@@ -217,7 +195,7 @@ function Run-Step1 {
     })
     $SetForm.Controls.Add($btnSetStandard)
 
-    # Apply Settings Button
+    # --- APPLY SETTINGS BUTTON ---
     $btnApply = New-Object System.Windows.Forms.Button
     $btnApply.Text = "Apply Settings"
     $btnApply.Size = New-Object System.Drawing.Size(250, 40)
@@ -469,8 +447,10 @@ function Run-Step7 {
             [System.Windows.Forms.MessageBoxIcon]::Information
         )
         if ($result -eq "Yes") {
+            # Only remove tracking and shortcuts here
             if (Test-Path $StateDir) { Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue }
-            Schedule-SelfDeleteAndRestart
+            if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
+            Restart-Computer-Manually
         }
     } catch { Write-ErrorMsg "Error during final cleanup: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
