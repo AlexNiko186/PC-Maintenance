@@ -441,7 +441,7 @@ function Run-Step3 {
 
         Write-Step "Applying software updates via Winget...";
         $wingetArgs = @("upgrade", "--all", "--include-unknown", "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements");
-        $wingetProc = Start-Process winget -ArgumentList$wingetArgs -Wait -NoNewWindow -PassThru;
+        $wingetProc = Start-Process winget -ArgumentList $wingetArgs -Wait -NoNewWindow -PassThru;
 
         if ($wingetProc.ExitCode -eq 0) { 
             Write-Success "Winget successfully updated all software."; 
