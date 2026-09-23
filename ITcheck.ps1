@@ -515,18 +515,19 @@ function Run-Step8 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         Write-Log "   -> Purging system and user temp folders..." "DarkGray"
-        $junkPaths = @($env:TEMP, "C:\Windows\Temp", "C:\Windows\Prefetch",
+        $junkPaths = @(
+            $env:TEMP, "C:\Windows\Temp", "C:\Windows\Prefetch",
             "C:\Windows\SoftwareDistribution\Download", "C:\ProgramData\Microsoft\Windows\WER\ReportArchive"
         )
-        foreach ($path in$junkPaths) {
-            if (Test-Path $path) { Get-ChildItem -Path$path -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
+        foreach ($path in $junkPaths) {
+            if (Test-Path $path) { Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
         }
 
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 
         Write-Log "   -> Running Automated Disk Cleanup..." "DarkGray"
         $volCaches = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches" -ErrorAction SilentlyContinue
-        foreach ($cache in$volCaches) {
+        foreach ($cache in $volCaches) {
             Set-ItemProperty -Path $cache.PSPath -Name "StateFlags0001" -Value 2 -Type DWord -ErrorAction SilentlyContinue
         }
         Start-Process "cleanmgr.exe" -ArgumentList "/sagerun:1" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
@@ -541,9 +542,18 @@ function Run-Step8 {
             [System.Windows.Forms.MessageBoxIcon]::Information
         )
         if ($result -eq "Yes") {
-            # Only remove tracking and shortcuts here
-            if (Test-Path $StateDir) { Remove-Item -Path$StateDir -Recurse -Force -ErrorAction SilentlyContinue }
-            if (Test-Path $ShortcutPath) { Remove-Item -Path$ShortcutPath -Force -ErrorAction SilentlyContinue }
+            # 1. Clean up tracking folder and shortcut
+            if (Test-Path $StateDir) { Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
+            
+            # 2. Delete the physical script file (and any duplicate downloads) BEFORE rebooting
+            if ($MyInvocation.MyCommand.Path) {
+                $scriptDir = Split-Path $MyInvocation.MyCommand.Path
+                $baseName = (Get-Item $MyInvocation.MyCommand.Path).BaseName -replace ' \(\d+\)$', ''
+                Remove-Item -Path "$scriptDir\$baseName*.ps1" -Force -ErrorAction SilentlyContinue
+            }
+
+            # 3. Trigger the restart
             Restart-Computer-Manually
         }
     } catch { Write-ErrorMsg "Error during final cleanup: $_" }
