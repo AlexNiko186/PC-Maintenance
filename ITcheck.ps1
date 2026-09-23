@@ -56,14 +56,27 @@ function Write-Log ([string]$Message, [string]$Color = "Black", [switch]$Bold) {
     [System.Windows.Forms.Application]::DoEvents()
 }
 
-function Write-Step ([string]$Message) { Write-Log "`n[*] $Message..." "Blue" -Bold }
-function Write-Success ([string]$Message) { Write-Log "[+] $Message" "Green" }
-function Write-ErrorMsg ([string]$Message) { Write-Log "[-] $Message" "Red" }
-function Write-WarningMsg ([string]$Message) { Write-Log "[!] $Message" "DarkOrange" }
+function Write-Step ([string]$Message) { 
+    Write-Log "`n[*] $Message..." "Blue" -Bold 
+}
+
+function Write-Success ([string]$Message) { 
+    Write-Log "[+] $Message" "Green" 
+}
+
+function Write-ErrorMsg ([string]$Message) { 
+    Write-Log "[-] $Message" "Red" 
+}
+
+function Write-WarningMsg ([string]$Message) { 
+    Write-Log "[!] $Message" "DarkOrange" 
+}
 
 function Set-RegKey ([string]$Path, [string]$Name, $Value, [string]$Type = "DWord") {
     try {
-        if (-not (Test-Path $Path)) { New-Item -Path $Path -Force -ErrorAction Stop | Out-Null }
+        if (-not (Test-Path $Path)) { 
+            New-Item -Path $Path -Force -ErrorAction Stop | Out-Null 
+        }
         Set-ItemProperty -Path $Path -Name $Name -Value $Value -Type $Type -ErrorAction Stop
     } catch {
         try {
@@ -81,9 +94,13 @@ function Set-RegKey ([string]$Path, [string]$Name, $Value, [string]$Type = "DWor
 function Get-RegKey ([string]$Path, [string]$Name, $Default) {
     try {
         $val = (Get-ItemProperty -Path $Path -Name $Name -ErrorAction Stop).$Name
-        if ($null -eq $val) { return $Default }
+        if ($null -eq $val) { 
+            return $Default 
+        }
         return [int]$val
-    } catch { return $Default }
+    } catch { 
+        return $Default 
+    }
 }
 
 # --- TRACKING & CLEANUP MECHANISMS ---
@@ -93,9 +110,19 @@ $PublicDesktop = [Environment]::GetFolderPath("CommonDesktopDirectory")
 $ShortcutPath = Join-Path $PublicDesktop "Resume PC Maintenance.lnk"
 
 function Save-StepState ([int]$StepNum) {
-    if (-not (Test-Path $StateDir)) { New-Item -Path $StateDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null }
-    $existing = if (Test-Path $StateFile) { Get-Content $StateFile -ErrorAction SilentlyContinue } else { @() }
-    if ($existing -notcontains $StepNum) { Add-Content -Path $StateFile -Value $StepNum -Force -ErrorAction SilentlyContinue }
+    if (-not (Test-Path $StateDir)) { 
+        New-Item -Path $StateDir -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null 
+    }
+    
+    if (Test-Path $StateFile) {
+        $existing = Get-Content $StateFile -ErrorAction SilentlyContinue
+    } else {
+        $existing = @()
+    }
+
+    if ($existing -notcontains $StepNum) { 
+        Add-Content -Path $StateFile -Value $StepNum -Force -ErrorAction SilentlyContinue 
+    }
 }
 
 function Get-StepState {
@@ -106,7 +133,9 @@ function Get-StepState {
         # If the tracking file is older than 12 hours, nuke it and start over
         if ($timeDiff.TotalHours -gt 12) {
             Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue
-            if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $ShortcutPath) { 
+                Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue 
+            }
             return @()
         }
         
@@ -139,7 +168,9 @@ function Run-Step1 {
 
     function Add-SettingRow ([string]$LabelText, [string]$Opt0_Text, [string]$Opt0_Desc, [string]$Opt1_Text, [string]$Opt1_Desc, [int]$StandardIndex, [int]$CurrentIndex) {
         $lbl = New-Object System.Windows.Forms.Label
-        $lbl.Text = $LabelText; $lbl.Location = New-Object System.Drawing.Point(20, $script:yOffset); $lbl.Size = New-Object System.Drawing.Size(160, 25)
+        $lbl.Text = $LabelText
+        $lbl.Location = New-Object System.Drawing.Point(20, $script:yOffset)
+        $lbl.Size = New-Object System.Drawing.Size(160, 25)
         $lbl.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
         $SetForm.Controls.Add($lbl)
 
@@ -147,7 +178,8 @@ function Run-Step1 {
         $cmb.DropDownStyle = "DropDownList"
         $cmb.Items.Add($Opt0_Text) | Out-Null
         $cmb.Items.Add($Opt1_Text) | Out-Null
-        $cmb.Location = New-Object System.Drawing.Point(190, ($script:yOffset - 3)); $cmb.Size = New-Object System.Drawing.Size(280, 25)
+        $cmb.Location = New-Object System.Drawing.Point(190, ($script:yOffset - 3))
+        $cmb.Size = New-Object System.Drawing.Size(280, 25)
         $SetForm.Controls.Add($cmb)
 
         $lblDesc = New-Object System.Windows.Forms.Label
@@ -157,16 +189,26 @@ function Run-Step1 {
         $SetForm.Controls.Add($lblDesc)
 
         $cmb.Add_SelectedIndexChanged({
-            $lblDesc.Text = if ($this.SelectedIndex -eq 0) { $Opt0_Desc } else { $Opt1_Desc }
-            $lblDesc.ForeColor = if ($this.SelectedIndex -eq $StandardIndex) { [System.Drawing.Color]::Blue } else { [System.Drawing.Color]::Red }
+            if ($this.SelectedIndex -eq 0) {
+                $lblDesc.Text = $Opt0_Desc
+            } else {
+                $lblDesc.Text = $Opt1_Desc
+            }
+
+            if ($this.SelectedIndex -eq $StandardIndex) {
+                $lblDesc.ForeColor = [System.Drawing.Color]::Blue
+            } else {
+                $lblDesc.ForeColor = [System.Drawing.Color]::Red
+            }
         }.GetNewClosure())
 
         $cmb.SelectedIndex = $CurrentIndex
         $script:yOffset += 85
+        
         return $cmb
     }
 
-    # --- READ CURRENT SYSTEM SETTINGS (With accurate Windows OS Defaults) ---
+    # Read Current States (Defaults standard if undefined)
     $curTheme   = if ((Get-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" "AppsUseLightTheme" 1) -eq 0) { 0 } else { 1 }
     $curTaskbar = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 1) -eq 0) { 0 } else { 1 }
     $curNotif   = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" 1) -eq 0) { 0 } else { 1 }
@@ -176,7 +218,7 @@ function Run-Step1 {
     $curWinPerm = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" 1) -eq 0) { 0 } else { 1 }
     $curGaming  = if ((Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1) -eq 0) { 0 } else { 1 }
 
-    # --- BUILD THE DYNAMIC MENUS ---
+    # Build Menus
     $cmbTheme   = Add-SettingRow "System Theme:" "Dark Mode" "Sets Windows apps and system background to Dark Mode." "Light Mode (Comodo Standard)" "Sets standard Windows app and system background colors." 1 $curTheme
     $cmbTaskbar = Add-SettingRow "Taskbar Alignment:" "Left (Comodo Standard)" "Aligns taskbar left, hides Widgets/Chat, but leaves the Search Box visible." "Center" "Aligns taskbar to the center and leaves Widgets/Search enabled." 0 $curTaskbar
     $cmbNotif   = Add-SettingRow "Notifications:" "Disabled (Comodo Standard)" "Turns off notification center tracking and toast pop-ups." "Enabled" "Leaves Windows notifications and toast pop-ups turned on." 0 $curNotif
@@ -186,7 +228,7 @@ function Run-Step1 {
     $cmbWinPerm = Add-SettingRow "Windows Permissions:" "Disabled (Comodo Standard)" "Turns off Ad ID, Activity History, App Launch tracking, and Tailored Experiences." "Windows Default (Enabled)" "Leaves standard Windows behavior tracking active." 0 $curWinPerm
     $cmbGaming  = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming
 
-    # --- SET ALL STANDARD BUTTON ---
+    # Set All Standard Button
     $btnSetStandard = New-Object System.Windows.Forms.Button
     $btnSetStandard.Text = "Set All Standard"
     $btnSetStandard.Size = New-Object System.Drawing.Size(230, 40)
@@ -205,7 +247,7 @@ function Run-Step1 {
     })
     $SetForm.Controls.Add($btnSetStandard)
 
-    # --- APPLY SETTINGS BUTTON ---
+    # Apply Settings Button
     $btnApply = New-Object System.Windows.Forms.Button
     $btnApply.Text = "Apply Settings"
     $btnApply.Size = New-Object System.Drawing.Size(250, 40)
@@ -219,49 +261,91 @@ function Run-Step1 {
 
         $idxTheme = $cmbTheme.SelectedIndex
         $themePath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize"
-        Set-RegKey $themePath "AppsUseLightTheme" $idxTheme; Set-RegKey $themePath "SystemUsesLightTheme" $idxTheme
+        Set-RegKey $themePath "AppsUseLightTheme" $idxTheme
+        Set-RegKey $themePath "SystemUsesLightTheme" $idxTheme
 
         $idxTaskbar = $cmbTaskbar.SelectedIndex
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" $idxTaskbar
-        if ($idxTaskbar -eq 0) { Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 0; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 0; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 }
-        else { Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 1; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 1; Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 }
+        
+        if ($idxTaskbar -eq 0) { 
+            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 0
+            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 0
+            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 
+        } else { 
+            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 1
+            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 1
+            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3 
+        }
 
         $idxNotif = $cmbNotif.SelectedIndex
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" $idxNotif
-        Set-RegKey "HKCU:\Software\Policies\Microsoft\Windows\Explorer" "DisableNotificationCenter" $(if ($idxNotif -eq 0) { 1 } else { 0 })
+        
+        if ($idxNotif -eq 0) {
+            Set-RegKey "HKCU:\Software\Policies\Microsoft\Windows\Explorer" "DisableNotificationCenter" 1
+        } else {
+            Set-RegKey "HKCU:\Software\Policies\Microsoft\Windows\Explorer" "DisableNotificationCenter" 0
+        }
 
         $idxRDP = $cmbRDP.SelectedIndex
         Set-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" $idxRDP
-        if ($idxRDP -eq 0) { Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue | Out-Null } else { Disable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue | Out-Null }
+        
+        if ($idxRDP -eq 0) { 
+            Enable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue | Out-Null 
+        } else { 
+            Disable-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue | Out-Null 
+        }
 
         $idxStorage = $cmbStorage.SelectedIndex
         $storagePath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy"
         Set-RegKey $storagePath "01" $idxStorage
-        if ($idxStorage -eq 1) { Set-RegKey $storagePath "08" 1; Set-RegKey $storagePath "256" 1; Set-RegKey $storagePath "32" 1; Set-RegKey $storagePath "512" 14 }
-        else { Set-RegKey $storagePath "08" 0; Set-RegKey $storagePath "32" 0 }
+        
+        if ($idxStorage -eq 1) { 
+            Set-RegKey $storagePath "08" 1
+            Set-RegKey $storagePath "256" 1
+            Set-RegKey $storagePath "32" 1
+            Set-RegKey $storagePath "512" 14 
+        } else { 
+            Set-RegKey $storagePath "08" 0
+            Set-RegKey $storagePath "32" 0 
+        }
 
         $idxPrivacy = $cmbPrivacy.SelectedIndex
         Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" $idxPrivacy
         Set-RegKey "HKCU:\Software\Microsoft\Speech_OneCore\Settings\OnlineSpeechPrivacy" "HasAccepted" $idxPrivacy
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\SearchSettings" "IsDeviceSearchHistoryEnabled" $idxPrivacy
-        $restrict = if ($idxPrivacy -eq 0) { 1 } else { 0 }
-        Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitInkCollection" $restrict; Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitTextCollection" $restrict
+        
+        if ($idxPrivacy -eq 0) {
+            Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitInkCollection" 1
+            Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitTextCollection" 1
+        } else {
+            Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitInkCollection" 0
+            Set-RegKey "HKCU:\Software\Microsoft\InputPersonalization" "RestrictImplicitTextCollection" 0
+        }
 
         $idxWinPerm = $cmbWinPerm.SelectedIndex
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" $idxWinPerm
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "Start_TrackProgs" $idxWinPerm
         Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\System" "EnableActivityFeed" $idxWinPerm
         Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Privacy" "TailoredExperiencesWithDiagnosticDataEnabled" $idxWinPerm
-        Set-RegKey "HKCU:\Control Panel\International\User Profile" "HttpAcceptLanguageOptOut" $(if ($idxWinPerm -eq 0) { 1 } else { 0 })
+        
+        if ($idxWinPerm -eq 0) {
+            Set-RegKey "HKCU:\Control Panel\International\User Profile" "HttpAcceptLanguageOptOut" 1
+        } else {
+            Set-RegKey "HKCU:\Control Panel\International\User Profile" "HttpAcceptLanguageOptOut" 0
+        }
 
         $idxGaming = $cmbGaming.SelectedIndex
-        Set-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" $idxGaming; Set-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" "AppCaptureEnabled" $idxGaming
-        Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" $idxGaming; Set-RegKey "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" $idxGaming
+        Set-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" $idxGaming
+        Set-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\GameDVR" "AppCaptureEnabled" $idxGaming
+        Set-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\GameDVR" "AllowGameDVR" $idxGaming
+        Set-RegKey "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" $idxGaming
 
         Write-Success "Settings applied. Restarting Explorer..."
         Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 2
-        if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { Start-Process explorer.exe }
+        if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { 
+            Start-Process explorer.exe 
+        }
         Start-Sleep -Seconds 1
 
         Save-StepState 1
@@ -289,12 +373,16 @@ function Run-Step2 {
         Start-Process "usoclient" -ArgumentList "StartInteractiveScan" -WindowStyle Hidden -ErrorAction SilentlyContinue
         
         Write-Log "   -> Script paused. Waiting for IT to close the Settings app..." "DarkGray"
-        while (Get-Process -Name "SystemSettings" -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 1 }
+        while (Get-Process -Name "SystemSettings" -ErrorAction SilentlyContinue) { 
+            Start-Sleep -Seconds 1 
+        }
 
         Write-Success "Windows Settings closed. Step logged as complete."
         Save-StepState 2
         $script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates"
-    } catch { Write-ErrorMsg "Failed to process Windows Updates: $_" }
+    } catch { 
+        Write-ErrorMsg "Failed to process Windows Updates: $_" 
+    }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
@@ -310,41 +398,53 @@ function Run-Step3 {
 
     $lblInfo = New-Object System.Windows.Forms.Label
     $lblInfo.Text = "Available Software Updates:"
-    $lblInfo.Location = New-Object System.Drawing.Point(15, 15); $lblInfo.AutoSize = $true
+    $lblInfo.Location = New-Object System.Drawing.Point(15, 15)
+    $lblInfo.AutoSize = $true
     $lblInfo.Font = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Bold)
     $UpdateForm.Controls.Add($lblInfo)
 
     $txtOutput = New-Object System.Windows.Forms.RichTextBox
-    $txtOutput.Location = New-Object System.Drawing.Point(15, 40); $txtOutput.Size = New-Object System.Drawing.Size(600, 300)
-    $txtOutput.Font = New-Object System.Drawing.Font("Consolas", 9); $txtOutput.ReadOnly = $true
-    $txtOutput.BackColor = [System.Drawing.Color]::Black; $txtOutput.ForeColor = [System.Drawing.Color]::LimeGreen
+    $txtOutput.Location = New-Object System.Drawing.Point(15, 40)
+    $txtOutput.Size = New-Object System.Drawing.Size(600, 300)
+    $txtOutput.Font = New-Object System.Drawing.Font("Consolas", 9)
+    $txtOutput.ReadOnly = $true
+    $txtOutput.BackColor = [System.Drawing.Color]::Black
+    $txtOutput.ForeColor = [System.Drawing.Color]::LimeGreen
     $txtOutput.Text = "Refreshing repositories and scanning for updates... Please wait.`n"
     $UpdateForm.Controls.Add($txtOutput)
 
     $btnUpdate = New-Object System.Windows.Forms.Button
     $btnUpdate.Text = "Install All Updates"
-    $btnUpdate.Location = New-Object System.Drawing.Point(15, 355);$btnUpdate.Size = New-Object System.Drawing.Size(180, 40)
-    $btnUpdate.Enabled =$false; $btnUpdate.BackColor = [System.Drawing.Color]::LightGreen$btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnUpdate.Location = New-Object System.Drawing.Point(15, 355)$btnUpdate.Size = New-Object System.Drawing.Size(180, 40)
+    $btnUpdate.Enabled =$false
+    $btnUpdate.BackColor = [System.Drawing.Color]::LightGreen$btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
     $UpdateForm.Controls.Add($btnUpdate)
 
     $btnCancel = New-Object System.Windows.Forms.Button
     $btnCancel.Text = "Close / Cancel"
-    $btnCancel.Location = New-Object System.Drawing.Point(435, 355);$btnCancel.Size = New-Object System.Drawing.Size(180, 40)
-    $btnCancel.Add_Click({$UpdateForm.Close() })
+    $btnCancel.Location = New-Object System.Drawing.Point(435, 355)$btnCancel.Size = New-Object System.Drawing.Size(180, 40)
+    $btnCancel.Add_Click({$UpdateForm.Close() 
+    })
     $UpdateForm.Controls.Add($btnCancel)
 
     $btnUpdate.Add_Click({$confirm = [System.Windows.Forms.MessageBox]::Show("WARNING: Winget will update ALL out-of-date software.`n`nIf it updates your remote access tool (e.g., AnyDesk, TeamViewer, Splashtop), YOUR REMOTE CONNECTION WILL DROP.`n`nDo you want to proceed?", "Remote Connection Warning", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
-        if ($confirm -eq "No") { return }
+        
+        if ($confirm -eq "No") { 
+            return 
+        }
 
-        $btnUpdate.Enabled = $false; $btnCancel.Enabled = $false$txtOutput.Text += "`n`nStarting silent background installation... Please wait."
+        $btnUpdate.Enabled = $false$btnCancel.Enabled = $false$txtOutput.Text += "`n`nStarting silent background installation... Please wait."
         $UpdateForm.Update()
 
         Write-Step "Applying software updates via Winget..."
         $wingetArgs = @("upgrade", "--all", "--include-unknown", "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
         $wingetProc = Start-Process winget -ArgumentList$wingetArgs -Wait -NoNewWindow -PassThru
 
-        if ($wingetProc.ExitCode -eq 0) { Write-Success "Winget successfully updated all software." }
-        else { Write-WarningMsg "Winget completed with exit code: $($wingetProc.ExitCode). Some apps may require a reboot." }
+        if ($wingetProc.ExitCode -eq 0) { 
+            Write-Success "Winget successfully updated all software." 
+        } else { 
+            Write-WarningMsg "Winget completed with exit code: $($wingetProc.ExitCode). Some apps may require a reboot." 
+        }
 
         $UpdateForm.Close()
         Save-StepState 3
@@ -369,7 +469,9 @@ function Run-Step3 {
                     $btnUpdate.Enabled =$true
                 }
             }
-        } catch { $txtOutput.Text = "Failed to scan via Winget. Error: $_" }
+        } catch { 
+            $txtOutput.Text = "Failed to scan via Winget. Error: $_" 
+        }
     })
 
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default$UpdateForm.ShowDialog() | Out-Null
@@ -391,6 +493,7 @@ function Run-Step4 {
 
     Write-Step "Scanning for known Windows bloatware..."
     $installedBloat = @()
+    
     foreach ($app in$bloatList) {
         if (Get-AppxPackage -Name $app -ErrorAction SilentlyContinue) {
             $installedBloat +=$app
@@ -419,8 +522,10 @@ function Run-Step4 {
     $chkList = New-Object System.Windows.Forms.CheckedListBox
     $chkList.Location = New-Object System.Drawing.Point(15, 40)$chkList.Size = New-Object System.Drawing.Size(350, 300)
     $chkList.CheckOnClick =$true
-    foreach ($app in $installedBloat) {$chkList.Items.Add($app,$true) | Out-Null # Checked by default
+    
+    foreach ($app in $installedBloat) {$chkList.Items.Add($app,$true) | Out-Null
     }
+    
     $BloatForm.Controls.Add($chkList)
 
     $btnUninstall = New-Object System.Windows.Forms.Button
@@ -439,7 +544,7 @@ function Run-Step4 {
     })
     $BloatForm.Controls.Add($btnSkip)
 
-    $btnUninstall.Add_Click({$btnUninstall.Enabled = $false; $btnSkip.Enabled = $false$BloatForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+    $btnUninstall.Add_Click({$btnUninstall.Enabled = $false$btnSkip.Enabled = $false$BloatForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
         Write-Log "   -> Removing selected bloatware... this may take a moment." "DarkGray"
         $BloatForm.Update()
         
@@ -469,8 +574,12 @@ function Run-Step5 {
             Write-Success "CCleaner closed. Step logged as complete."
             Save-StepState 5
             $script:btnStep5.Text = "[ DONE ] 5. Launch CCleaner"
-        } else { Write-WarningMsg "CCleaner not found at $ccleanerExe." }
-    } catch { Write-ErrorMsg "Failed to launch CCleaner: $_" }
+        } else { 
+            Write-WarningMsg "CCleaner not found at $ccleanerExe." 
+        }
+    } catch { 
+        Write-ErrorMsg "Failed to launch CCleaner: $_" 
+    }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
@@ -486,8 +595,12 @@ function Run-Step6 {
             Write-Success "Revo Uninstaller closed. Step logged as complete."
             Save-StepState 6
             $script:btnStep6.Text = "[ DONE ] 6. Launch Revo Uninstaller"
-        } else { Write-WarningMsg "Revo not found at $revoExe." }
-    } catch { Write-ErrorMsg "Failed to launch Revo: $_" }
+        } else { 
+            Write-WarningMsg "Revo not found at $revoExe." 
+        }
+    } catch { 
+        Write-ErrorMsg "Failed to launch Revo: $_" 
+    }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
@@ -506,7 +619,9 @@ function Run-Step7 {
 
         Save-StepState 7
         $script:btnStep7.Text = "[ DONE ] 7. Apply Clinic Optimizations"
-    } catch { Write-ErrorMsg "Error optimizing PC: $_" }
+    } catch { 
+        Write-ErrorMsg "Error optimizing PC: $_" 
+    }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
@@ -515,19 +630,23 @@ function Run-Step8 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         Write-Log "   -> Purging system and user temp folders..." "DarkGray"
-        $junkPaths = @(
-            $env:TEMP, "C:\Windows\Temp", "C:\Windows\Prefetch",
-            "C:\Windows\SoftwareDistribution\Download", "C:\ProgramData\Microsoft\Windows\WER\ReportArchive"
+        $junkPaths = @($env:TEMP, 
+            "C:\Windows\Temp", 
+            "C:\Windows\Prefetch",
+            "C:\Windows\SoftwareDistribution\Download", 
+            "C:\ProgramData\Microsoft\Windows\WER\ReportArchive"
         )
-        foreach ($path in $junkPaths) {
-            if (Test-Path $path) { Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
+        foreach ($path in$junkPaths) {
+            if (Test-Path $path) { 
+                Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue 
+            }
         }
 
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 
         Write-Log "   -> Running Automated Disk Cleanup..." "DarkGray"
         $volCaches = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches" -ErrorAction SilentlyContinue
-        foreach ($cache in $volCaches) {
+        foreach ($cache in$volCaches) {
             Set-ItemProperty -Path $cache.PSPath -Name "StateFlags0001" -Value 2 -Type DWord -ErrorAction SilentlyContinue
         }
         Start-Process "cleanmgr.exe" -ArgumentList "/sagerun:1" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
@@ -541,27 +660,37 @@ function Run-Step8 {
             [System.Windows.Forms.MessageBoxButtons]::YesNo,
             [System.Windows.Forms.MessageBoxIcon]::Information
         )
+        
         if ($result -eq "Yes") {
             # 1. Clean up tracking folder and shortcut
-            if (Test-Path $StateDir) { Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue }
-            if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $StateDir) { 
+                Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue 
+            }
             
-            # 2. Delete the physical script file (and any duplicate downloads) BEFORE rebooting
+            if (Test-Path $ShortcutPath) { 
+                Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue 
+            }
+            
+            # 2. Delete the physical script file BEFORE rebooting
             if ($MyInvocation.MyCommand.Path) {
-                $scriptDir = Split-Path $MyInvocation.MyCommand.Path
-                $baseName = (Get-Item $MyInvocation.MyCommand.Path).BaseName -replace ' \(\d+\)$', ''
+                $scriptPath =$MyInvocation.MyCommand.Path
+                $scriptDir = Split-Path$scriptPath
+                $baseName = (Get-Item$scriptPath).BaseName -replace ' \(\d+\)$', ''
                 Remove-Item -Path "$scriptDir\$baseName*.ps1" -Force -ErrorAction SilentlyContinue
             }
 
             # 3. Trigger the restart
             Restart-Computer-Manually
         }
-    } catch { Write-ErrorMsg "Error during final cleanup: $_" }
+    } catch { 
+        Write-ErrorMsg "Error during final cleanup: $_" 
+    }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
 function Run-AllSteps {
     $btnRunAll.Enabled =$false
+    
     if ($script:btnStep1.Text -notmatch "DONE") { Run-Step1 }
     if ($script:btnStep2.Text -notmatch "DONE") { Run-Step2 }
     if ($script:btnStep3.Text -notmatch "DONE") { Run-Step3 }
@@ -570,9 +699,11 @@ function Run-AllSteps {
     if ($script:btnStep6.Text -notmatch "DONE") { Run-Step6 }
     if ($script:btnStep7.Text -notmatch "DONE") { Run-Step7 }
     if ($script:btnStep8.Text -notmatch "DONE") { Run-Step8 }
+    
     Write-Log "`n===============================" "DarkCyan" -Bold
     Write-Log " ALL PROCESSES COMPLETE!" "Green" -Bold
     Write-Log "===============================" "DarkCyan" -Bold
+    
     $btnRunAll.Enabled = $true
 }
 
@@ -606,8 +737,10 @@ $MainForm.Controls.Add($Panel)
 
 function Add-GuiButton([string]$Text, [scriptblock]$Action) {
     $btn = New-Object System.Windows.Forms.Button
-    $btn.Text = $Text; $btn.Size = New-Object System.Drawing.Size(240, 35)
-    $btn.Font = $BtnFont; $btn.Margin = New-Object System.Windows.Forms.Padding(0,0,0,5)
+    $btn.Text = $Text
+    $btn.Size = New-Object System.Drawing.Size(240, 35)
+    $btn.Font = $BtnFont
+    $btn.Margin = New-Object System.Windows.Forms.Padding(0,0,0,5)
     $btn.Add_Click($Action)
     $Panel.Controls.Add($btn)
     return $btn
@@ -668,6 +801,7 @@ Write-Log "Note: The script will pause while external tools are open.`n" "DarkGr
 
 # --- CHECK FOR PREVIOUS PROGRESS UPON LAUNCH ---
 $completedSteps = Get-StepState
+
 if ($completedSteps.Count -gt 0) {
     Write-Log "   -> Resuming session. Marking completed steps..." "DarkOrange" -Bold
     if ($completedSteps -contains 1) {$script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings" }
