@@ -100,11 +100,11 @@ function Save-StepState ([int]$StepNum) {
 
 function Get-StepState {
     if (Test-Path $StateFile) {
-        $fileDate = (Get-Item $StateFile).LastWriteTime.Date
-        $todayDate = (Get-Date).Date
+        $fileTime = (Get-Item $StateFile).LastWriteTime
+        $timeDiff = New-TimeSpan -Start $fileTime -End (Get-Date)
         
-        # If the tracking file is from a previous day, nuke it and start over
-        if ($fileDate -lt $todayDate) {
+        # If the tracking file is older than 12 hours, nuke it and start over
+        if ($timeDiff.TotalHours -gt 12) {
             Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue
             if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
             return @()
@@ -323,28 +323,25 @@ function Run-Step3 {
 
     $btnUpdate = New-Object System.Windows.Forms.Button
     $btnUpdate.Text = "Install All Updates"
-    $btnUpdate.Location = New-Object System.Drawing.Point(15, 355); $btnUpdate.Size = New-Object System.Drawing.Size(180, 40)
-    $btnUpdate.Enabled = $false; $btnUpdate.BackColor = [System.Drawing.Color]::LightGreen
-    $btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnUpdate.Location = New-Object System.Drawing.Point(15, 355);$btnUpdate.Size = New-Object System.Drawing.Size(180, 40)
+    $btnUpdate.Enabled =$false; $btnUpdate.BackColor = [System.Drawing.Color]::LightGreen$btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
     $UpdateForm.Controls.Add($btnUpdate)
 
     $btnCancel = New-Object System.Windows.Forms.Button
     $btnCancel.Text = "Close / Cancel"
-    $btnCancel.Location = New-Object System.Drawing.Point(435, 355); $btnCancel.Size = New-Object System.Drawing.Size(180, 40)
-    $btnCancel.Add_Click({ $UpdateForm.Close() })
+    $btnCancel.Location = New-Object System.Drawing.Point(435, 355);$btnCancel.Size = New-Object System.Drawing.Size(180, 40)
+    $btnCancel.Add_Click({$UpdateForm.Close() })
     $UpdateForm.Controls.Add($btnCancel)
 
-    $btnUpdate.Add_Click({
-        $confirm = [System.Windows.Forms.MessageBox]::Show("WARNING: Winget will update ALL out-of-date software.`n`nIf it updates your remote access tool (e.g., AnyDesk, TeamViewer, Splashtop), YOUR REMOTE CONNECTION WILL DROP.`n`nDo you want to proceed?", "Remote Connection Warning", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
+    $btnUpdate.Add_Click({$confirm = [System.Windows.Forms.MessageBox]::Show("WARNING: Winget will update ALL out-of-date software.`n`nIf it updates your remote access tool (e.g., AnyDesk, TeamViewer, Splashtop), YOUR REMOTE CONNECTION WILL DROP.`n`nDo you want to proceed?", "Remote Connection Warning", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
         if ($confirm -eq "No") { return }
 
-        $btnUpdate.Enabled = $false; $btnCancel.Enabled = $false
-        $txtOutput.Text += "`n`nStarting silent background installation... Please wait."
+        $btnUpdate.Enabled = $false; $btnCancel.Enabled = $false$txtOutput.Text += "`n`nStarting silent background installation... Please wait."
         $UpdateForm.Update()
 
         Write-Step "Applying software updates via Winget..."
         $wingetArgs = @("upgrade", "--all", "--include-unknown", "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements")
-        $wingetProc = Start-Process winget -ArgumentList $wingetArgs -Wait -NoNewWindow -PassThru
+        $wingetProc = Start-Process winget -ArgumentList$wingetArgs -Wait -NoNewWindow -PassThru
 
         if ($wingetProc.ExitCode -eq 0) { Write-Success "Winget successfully updated all software." }
         else { Write-WarningMsg "Winget completed with exit code: $($wingetProc.ExitCode). Some apps may require a reboot." }
@@ -354,30 +351,28 @@ function Run-Step3 {
         $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)"
     })
 
-    $UpdateForm.Add_Shown({
-        $UpdateForm.Update()
+    $UpdateForm.Add_Shown({$UpdateForm.Update()
         try {
             if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
                 $txtOutput.Text = "Error: Winget is not installed or recognized on this PC."
             } else {
                 Start-Process winget -ArgumentList "source update" -Wait -NoNewWindow | Out-Null
                 $wingetOut = winget upgrade --accept-source-agreements | Out-String
-                $cleanOut = $wingetOut -replace "\x1B\[[0-9;]*[a-zA-Z]", ""
+                $cleanOut =$wingetOut -replace "\x1B\[[0-9;]*[a-zA-Z]", ""
 
                 if ($cleanOut -match "No installed package found matching input criteria" -or $cleanOut -match "No available upgrades") {
                     $txtOutput.Text = "Scan Complete: All installed software is already up to date!"
                     Save-StepState 3
                     $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)"
                 } else {
-                    $txtOutput.Text = $cleanOut
-                    $btnUpdate.Enabled = $true
+                    $txtOutput.Text =$cleanOut
+                    $btnUpdate.Enabled =$true
                 }
             }
         } catch { $txtOutput.Text = "Failed to scan via Winget. Error: $_" }
     })
 
-    $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
-    $UpdateForm.ShowDialog() | Out-Null
+    $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default$UpdateForm.ShowDialog() | Out-Null
 }
 
 function Run-Step4 {
@@ -434,20 +429,27 @@ function Run-Step6 {
 }
 
 function Run-Step7 {
-    Write-Step "Step 7: Purging Temp & Cache"
+    Write-Step "Step 7: Purging Temp, Cache & Disk Cleanup"
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         Write-Log "   -> Purging system and user temp folders..." "DarkGray"
-        $junkPaths = @(
-            $env:TEMP, "C:\Windows\Temp", "C:\Windows\Prefetch",
+        $junkPaths = @($env:TEMP, "C:\Windows\Temp", "C:\Windows\Prefetch",
             "C:\Windows\SoftwareDistribution\Download", "C:\ProgramData\Microsoft\Windows\WER\ReportArchive"
         )
-        foreach ($path in $junkPaths) {
-            if (Test-Path $path) { Get-ChildItem -Path $path -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
+        foreach ($path in$junkPaths) {
+            if (Test-Path $path) { Get-ChildItem -Path$path -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue }
         }
 
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue
-        Write-Success "All temporary data and cache destroyed."
+
+        Write-Log "   -> Running Automated Disk Cleanup..." "DarkGray"
+        $volCaches = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches" -ErrorAction SilentlyContinue
+        foreach ($cache in$volCaches) {
+            Set-ItemProperty -Path $cache.PSPath -Name "StateFlags0001" -Value 2 -Type DWord -ErrorAction SilentlyContinue
+        }
+        Start-Process "cleanmgr.exe" -ArgumentList "/sagerun:1" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
+
+        Write-Success "All temporary data, cache, and disk junk destroyed."
         $script:btnStep7.Text = "[ DONE ] 7. Purge Temp & Cache"
 
         $result = [System.Windows.Forms.MessageBox]::Show(
@@ -458,8 +460,8 @@ function Run-Step7 {
         )
         if ($result -eq "Yes") {
             # Only remove tracking and shortcuts here
-            if (Test-Path $StateDir) { Remove-Item -Path $StateDir -Recurse -Force -ErrorAction SilentlyContinue }
-            if (Test-Path $ShortcutPath) { Remove-Item -Path $ShortcutPath -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $StateDir) { Remove-Item -Path$StateDir -Recurse -Force -ErrorAction SilentlyContinue }
+            if (Test-Path $ShortcutPath) { Remove-Item -Path$ShortcutPath -Force -ErrorAction SilentlyContinue }
             Restart-Computer-Manually
         }
     } catch { Write-ErrorMsg "Error during final cleanup: $_" }
@@ -467,7 +469,7 @@ function Run-Step7 {
 }
 
 function Run-AllSteps {
-    $btnRunAll.Enabled = $false
+    $btnRunAll.Enabled =$false
     if ($script:btnStep1.Text -notmatch "DONE") { Run-Step1 }
     if ($script:btnStep2.Text -notmatch "DONE") { Run-Step2 }
     if ($script:btnStep3.Text -notmatch "DONE") { Run-Step3 }
@@ -574,13 +576,13 @@ Write-Log "Note: The script will pause while external tools are open.`n" "DarkGr
 $completedSteps = Get-StepState
 if ($completedSteps.Count -gt 0) {
     Write-Log "   -> Resuming session. Marking completed steps..." "DarkOrange" -Bold
-    if ($completedSteps -contains 1) { $script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings" }
-    if ($completedSteps -contains 2) { $script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates" }
-    if ($completedSteps -contains 3) { $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)" }
-    if ($completedSteps -contains 4) { $script:btnStep4.Text = "[ DONE ] 4. Launch CCleaner" }
-    if ($completedSteps -contains 5) { $script:btnStep5.Text = "[ DONE ] 5. Launch Revo Uninstaller" }
-    if ($completedSteps -contains 6) { $script:btnStep6.Text = "[ DONE ] 6. Apply Clinic Optimizations" }
-    if ($completedSteps -contains 7) { $script:btnStep7.Text = "[ DONE ] 7. Purge Temp & Cache" }
+    if ($completedSteps -contains 1) {$script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings" }
+    if ($completedSteps -contains 2) {$script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates" }
+    if ($completedSteps -contains 3) {$script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)" }
+    if ($completedSteps -contains 4) {$script:btnStep4.Text = "[ DONE ] 4. Launch CCleaner" }
+    if ($completedSteps -contains 5) {$script:btnStep5.Text = "[ DONE ] 5. Launch Revo Uninstaller" }
+    if ($completedSteps -contains 6) {$script:btnStep6.Text = "[ DONE ] 6. Apply Clinic Optimizations" }
+    if ($completedSteps -contains 7) {$script:btnStep7.Text = "[ DONE ] 7. Purge Temp & Cache" }
 }
 
 # Render the GUI
