@@ -122,7 +122,7 @@ function Restart-Computer-Manually {
 }
 
 # ==========================================
-# SCRIPT MODULES (The 7 Steps)
+# SCRIPT MODULES (The 8 Steps)
 # ==========================================
 
 function Run-Step1 {
@@ -376,7 +376,89 @@ function Run-Step3 {
 }
 
 function Run-Step4 {
-    Write-Step "Step 4: Launching CCleaner"
+    $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+
+    # Define a clinical-safe bloatware removal list
+    $bloatList = @(
+        "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.GamingApp",
+        "Microsoft.GetHelp", "Microsoft.Getstarted", "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.MicrosoftSolitaireCollection", "Microsoft.People", 
+        "Microsoft.SkypeApp", "Microsoft.WindowsFeedbackHub", "Microsoft.Xbox.TCUI",
+        "Microsoft.XboxApp", "Microsoft.XboxGamingOverlay", "Microsoft.XboxIdentityProvider",
+        "Microsoft.XboxSpeechToTextOverlay", "Microsoft.YourPhone", 
+        "Microsoft.ZuneMusic", "Microsoft.ZuneVideo", "Microsoft.549981C3F5F10"
+    )
+
+    Write-Step "Scanning for known Windows bloatware..."
+    $installedBloat = @()
+    foreach ($app in$bloatList) {
+        if (Get-AppxPackage -Name $app -ErrorAction SilentlyContinue) {
+            $installedBloat +=$app
+        }
+    }
+
+    if ($installedBloat.Count -eq 0) {
+        Write-Success "No known bloatware found on this PC."
+        Save-StepState 4
+        $script:btnStep4.Text = "[ DONE ] 4. Remove Bloatware"
+        $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
+        return
+    }
+
+    $BloatForm = New-Object System.Windows.Forms.Form
+    $BloatForm.Text = "Remove Bloatware"
+    $BloatForm.Size = New-Object System.Drawing.Size(400, 450)$BloatForm.StartPosition = "CenterParent"
+    $BloatForm.FormBorderStyle = "FixedDialog"
+    $BloatForm.MaximizeBox =$false
+
+    $lblInfo = New-Object System.Windows.Forms.Label
+    $lblInfo.Text = "Select bloatware to remove:"
+    $lblInfo.Location = New-Object System.Drawing.Point(15, 15)$lblInfo.AutoSize = $true$lblInfo.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $BloatForm.Controls.Add($lblInfo)
+
+    $chkList = New-Object System.Windows.Forms.CheckedListBox
+    $chkList.Location = New-Object System.Drawing.Point(15, 40)$chkList.Size = New-Object System.Drawing.Size(350, 300)
+    $chkList.CheckOnClick =$true
+    foreach ($app in $installedBloat) {$chkList.Items.Add($app,$true) | Out-Null # Checked by default
+    }
+    $BloatForm.Controls.Add($chkList)
+
+    $btnUninstall = New-Object System.Windows.Forms.Button
+    $btnUninstall.Text = "Uninstall Selected"
+    $btnUninstall.Location = New-Object System.Drawing.Point(15, 355)$btnUninstall.Size = New-Object System.Drawing.Size(160, 40)
+    $btnUninstall.BackColor = [System.Drawing.Color]::LightCoral$btnUninstall.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $BloatForm.Controls.Add($btnUninstall)
+
+    $btnSkip = New-Object System.Windows.Forms.Button
+    $btnSkip.Text = "Skip / Keep All"
+    $btnSkip.Location = New-Object System.Drawing.Point(205, 355)$btnSkip.Size = New-Object System.Drawing.Size(160, 40)
+    $btnSkip.Add_Click({$BloatForm.Close()
+        Save-StepState 4
+        $script:btnStep4.Text = "[ DONE ] 4. Remove Bloatware"
+        Write-Log "   -> Bloatware removal skipped." "DarkGray"
+    })
+    $BloatForm.Controls.Add($btnSkip)
+
+    $btnUninstall.Add_Click({$btnUninstall.Enabled = $false; $btnSkip.Enabled = $false$BloatForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
+        Write-Log "   -> Removing selected bloatware... this may take a moment." "DarkGray"
+        $BloatForm.Update()
+        
+        foreach ($item in$chkList.CheckedItems) {
+            Get-AppxPackage -Name $item -AllUsers -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue
+            Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq$item } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue
+        }
+        
+        Write-Success "Selected bloatware successfully removed."
+        $BloatForm.Close()
+        Save-StepState 4
+        $script:btnStep4.Text = "[ DONE ] 4. Remove Bloatware"
+    })
+
+    $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default$BloatForm.ShowDialog() | Out-Null
+}
+
+function Run-Step5 {
+    Write-Step "Step 5: Launching CCleaner"
     Write-Log "   -> Script paused. Waiting for IT to finish and close CCleaner..." "DarkGray"
 
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
@@ -385,15 +467,15 @@ function Run-Step4 {
         if (Test-Path $ccleanerExe) {
             Start-Process $ccleanerExe -Wait
             Write-Success "CCleaner closed. Step logged as complete."
-            Save-StepState 4
-            $script:btnStep4.Text = "[ DONE ] 4. Launch CCleaner"
+            Save-StepState 5
+            $script:btnStep5.Text = "[ DONE ] 5. Launch CCleaner"
         } else { Write-WarningMsg "CCleaner not found at $ccleanerExe." }
     } catch { Write-ErrorMsg "Failed to launch CCleaner: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
-function Run-Step5 {
-    Write-Step "Step 5: Launching Revo Uninstaller"
+function Run-Step6 {
+    Write-Step "Step 6: Launching Revo Uninstaller"
     Write-Log "   -> Script paused. Waiting for IT to finish and close Revo..." "DarkGray"
 
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
@@ -402,15 +484,15 @@ function Run-Step5 {
         if (Test-Path $revoExe) {
             Start-Process $revoExe -Wait
             Write-Success "Revo Uninstaller closed. Step logged as complete."
-            Save-StepState 5
-            $script:btnStep5.Text = "[ DONE ] 5. Launch Revo Uninstaller"
+            Save-StepState 6
+            $script:btnStep6.Text = "[ DONE ] 6. Launch Revo Uninstaller"
         } else { Write-WarningMsg "Revo not found at $revoExe." }
     } catch { Write-ErrorMsg "Failed to launch Revo: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
-function Run-Step6 {
-    Write-Step "Step 6: Clinic PC Optimizations"
+function Run-Step7 {
+    Write-Step "Step 7: Clinic PC Optimizations"
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue
@@ -422,14 +504,14 @@ function Run-Step6 {
         Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -ErrorAction SilentlyContinue
         Write-Success "PC Optimized for performance and stability."
 
-        Save-StepState 6
-        $script:btnStep6.Text = "[ DONE ] 6. Apply Clinic Optimizations"
+        Save-StepState 7
+        $script:btnStep7.Text = "[ DONE ] 7. Apply Clinic Optimizations"
     } catch { Write-ErrorMsg "Error optimizing PC: $_" }
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
-function Run-Step7 {
-    Write-Step "Step 7: Purging Temp, Cache & Disk Cleanup"
+function Run-Step8 {
+    Write-Step "Step 8: Purging Temp, Cache & Disk Cleanup"
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
         Write-Log "   -> Purging system and user temp folders..." "DarkGray"
@@ -450,7 +532,7 @@ function Run-Step7 {
         Start-Process "cleanmgr.exe" -ArgumentList "/sagerun:1" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue
 
         Write-Success "All temporary data, cache, and disk junk destroyed."
-        $script:btnStep7.Text = "[ DONE ] 7. Purge Temp & Cache"
+        $script:btnStep8.Text = "[ DONE ] 8. Purge Temp & Cache"
 
         $result = [System.Windows.Forms.MessageBox]::Show(
             "All optimization steps are completely finished! Would you like to restart the PC now to finalize everything?",
@@ -477,6 +559,7 @@ function Run-AllSteps {
     if ($script:btnStep5.Text -notmatch "DONE") { Run-Step5 }
     if ($script:btnStep6.Text -notmatch "DONE") { Run-Step6 }
     if ($script:btnStep7.Text -notmatch "DONE") { Run-Step7 }
+    if ($script:btnStep8.Text -notmatch "DONE") { Run-Step8 }
     Write-Log "`n===============================" "DarkCyan" -Bold
     Write-Log " ALL PROCESSES COMPLETE!" "Green" -Bold
     Write-Log "===============================" "DarkCyan" -Bold
@@ -527,10 +610,11 @@ $btnRunAll.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.
 $script:btnStep1 = Add-GuiButton "1. Configure Windows Settings" { Run-Step1 }
 $script:btnStep2 = Add-GuiButton "2. Run Windows Updates" { Run-Step2 }
 $script:btnStep3 = Add-GuiButton "3. Update Apps (Winget)" { Run-Step3 }
-$script:btnStep4 = Add-GuiButton "4. Launch CCleaner" { Run-Step4 }
-$script:btnStep5 = Add-GuiButton "5. Launch Revo Uninstaller" { Run-Step5 }
-$script:btnStep6 = Add-GuiButton "6. Apply Clinic Optimizations" { Run-Step6 }
-$script:btnStep7 = Add-GuiButton "7. Purge Temp & Cache" { Run-Step7 }
+$script:btnStep4 = Add-GuiButton "4. Remove Bloatware" { Run-Step4 }
+$script:btnStep5 = Add-GuiButton "5. Launch CCleaner" { Run-Step5 }
+$script:btnStep6 = Add-GuiButton "6. Launch Revo Uninstaller" { Run-Step6 }
+$script:btnStep7 = Add-GuiButton "7. Apply Clinic Optimizations" { Run-Step7 }
+$script:btnStep8 = Add-GuiButton "8. Purge Temp & Cache" { Run-Step8 }
 
 $btnRestart = New-Object System.Windows.Forms.Button
 $btnRestart.Text = "Restart PC"
@@ -579,10 +663,11 @@ if ($completedSteps.Count -gt 0) {
     if ($completedSteps -contains 1) {$script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings" }
     if ($completedSteps -contains 2) {$script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates" }
     if ($completedSteps -contains 3) {$script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)" }
-    if ($completedSteps -contains 4) {$script:btnStep4.Text = "[ DONE ] 4. Launch CCleaner" }
-    if ($completedSteps -contains 5) {$script:btnStep5.Text = "[ DONE ] 5. Launch Revo Uninstaller" }
-    if ($completedSteps -contains 6) {$script:btnStep6.Text = "[ DONE ] 6. Apply Clinic Optimizations" }
-    if ($completedSteps -contains 7) {$script:btnStep7.Text = "[ DONE ] 7. Purge Temp & Cache" }
+    if ($completedSteps -contains 4) {$script:btnStep4.Text = "[ DONE ] 4. Remove Bloatware" }
+    if ($completedSteps -contains 5) {$script:btnStep5.Text = "[ DONE ] 5. Launch CCleaner" }
+    if ($completedSteps -contains 6) {$script:btnStep6.Text = "[ DONE ] 6. Launch Revo Uninstaller" }
+    if ($completedSteps -contains 7) {$script:btnStep7.Text = "[ DONE ] 7. Apply Clinic Optimizations" }
+    if ($completedSteps -contains 8) {$script:btnStep8.Text = "[ DONE ] 8. Purge Temp & Cache" }
 }
 
 # Render the GUI
