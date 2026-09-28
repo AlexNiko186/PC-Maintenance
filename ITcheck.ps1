@@ -637,11 +637,12 @@ function Run-Step7 {
 }
 
 function Run-Step8 {
-    Write-Step "Step 8: Purging Temp, Cache & Disk Cleanup";
+    Write-Step "Step 8: Purging Temp & Cache";
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor;
     try {
         Write-Log "   -> Purging system and user temp folders..." "DarkGray";
-        $junkPaths = @($env:TEMP, 
+        $junkPaths = @(
+            $env:TEMP, 
             "C:\Windows\Temp", 
             "C:\Windows\Prefetch",
             "C:\Windows\SoftwareDistribution\Download", 
@@ -655,14 +656,7 @@ function Run-Step8 {
 
         Clear-RecycleBin -Force -ErrorAction SilentlyContinue;
 
-        Write-Log "   -> Running Automated Disk Cleanup..." "DarkGray";
-        $volCaches = Get-ChildItem "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches" -ErrorAction SilentlyContinue;
-        foreach ($cache in @($volCaches)) {
-            Set-ItemProperty -Path $cache.PSPath -Name "StateFlags0001" -Value 2 -Type DWord -ErrorAction SilentlyContinue;
-        }
-        Start-Process "cleanmgr.exe" -ArgumentList "/sagerun:1" -Wait -WindowStyle Hidden -ErrorAction SilentlyContinue;
-
-        Write-Success "All temporary data, cache, and disk junk destroyed.";
+        Write-Success "All temporary data and cache destroyed.";
         $script:btnStep8.Text = "[ DONE ] 8. Purge Temp & Cache";
 
         $result = [System.Windows.Forms.MessageBox]::Show(
@@ -684,9 +678,9 @@ function Run-Step8 {
             
             # 2. Delete the physical script file BEFORE rebooting
             if ($MyInvocation.MyCommand.Path) {
-                $scriptPath =$MyInvocation.MyCommand.Path;
-                $scriptDir = Split-Path$scriptPath;
-                $baseName = (Get-Item$scriptPath).BaseName -replace ' \(\d+\)$', '';
+                $scriptPath = $MyInvocation.MyCommand.Path;
+                $scriptDir = Split-Path $scriptPath;
+                $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', '';
                 Remove-Item -Path "$scriptDir\$baseName*.ps1" -Force -ErrorAction SilentlyContinue;
             }
 
