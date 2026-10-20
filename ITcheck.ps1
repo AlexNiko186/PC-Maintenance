@@ -683,7 +683,16 @@ function Run-Step8 {
                 $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', '';
                 Remove-Item -Path "$scriptDir\$baseName*.ps1" -Force -ErrorAction SilentlyContinue;
             }
-
+# ---> GOOGLE SHEETS LOGGING <---
+        $pcName = $env:COMPUTERNAME;
+        $webhookUrl = "https://script.google.com/a/macros/comodotechnology.com/s/AKfycbw58sBaJBm-Qimu2MPJEMpj9YOqpdguxx7tYa-_g3UJD-v27VKBb262jrU_R8OBSXKZUA/exec";
+        
+        $payload = @{
+            pcName = $pcName;
+            status = "Completed";
+        } | ConvertTo-Json;
+        
+        Invoke-RestMethod -Uri $webhookUrl -Method Post -Body $payload -ContentType "application/json" -ErrorAction SilentlyContinue;
             # 3. Trigger the restart
             Restart-Computer-Manually;
         }
