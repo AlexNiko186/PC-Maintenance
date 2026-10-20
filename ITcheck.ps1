@@ -166,6 +166,10 @@ function Run-Step1 {
 
     $script:yOffset = 20;
 
+    # --- OS Detection (Win 10 vs Win 11) ---
+    $buildNumber = [Environment]::OSVersion.Version.Build;
+    $isWin11 = $buildNumber -ge 22000;
+
     function Add-SettingRow ([string]$LabelText, [string]$Opt0_Text, [string]$Opt0_Desc, [string]$Opt1_Text, [string]$Opt1_Desc, [int]$StandardIndex, [int]$CurrentIndex) {
         $lbl = New-Object System.Windows.Forms.Label;
         $lbl.Text = $LabelText;
@@ -210,17 +214,25 @@ function Run-Step1 {
 
     # Read Current States (Defaults standard if undefined)
     $curTheme   = if ((Get-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" "AppsUseLightTheme" 1) -eq 0) { 0 } else { 1 };
-    $curTaskbar = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 1) -eq 0) { 0 } else { 1 };
     $curNotif   = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" 1) -eq 0) { 0 } else { 1 };
     $curRDP     = if ((Get-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 1) -eq 0) { 0 } else { 1 };
     $curStorage = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\StorageSense\Parameters\StoragePolicy" "01" 0) -eq 0) { 0 } else { 1 };
     $curPrivacy = if ((Get-RegKey "HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection" "AllowTelemetry" 3) -eq 0) { 0 } else { 1 };
     $curWinPerm = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo" "Enabled" 1) -eq 0) { 0 } else { 1 };
     $curGaming  = if ((Get-RegKey "HKCU:\System\GameConfigStore" "GameDVR_Enabled" 1) -eq 0) { 0 } else { 1 };
+    
+    $curTaskbar = 0;
+    if ($isWin11) {
+        $curTaskbar = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 1) -eq 0) { 0 } else { 1 };
+    }
 
     # Build Menus
     $cmbTheme   = Add-SettingRow "System Theme:" "Dark Mode" "Sets Windows apps and system background to Dark Mode." "Light Mode (Comodo Standard)" "Sets standard Windows app and system background colors." 1 $curTheme;
-    $cmbTaskbar = Add-SettingRow "Taskbar Alignment:" "Left (Comodo Standard)" "Aligns taskbar left, hides Widgets/Chat, but leaves the Search Box visible." "Center" "Aligns taskbar to the center and leaves Widgets/Search enabled." 0 $curTaskbar;
+    
+    $taskbarLabel = if ($isWin11) { "Taskbar Alignment:" } else { "Taskbar (Win 11 Only):" };
+    $cmbTaskbar = Add-SettingRow $taskbarLabel "Left (Comodo Standard)" "Aligns taskbar left, hides Widgets/Chat, but leaves the Search Box visible." "Center" "Aligns taskbar to the center and leaves Widgets/Search enabled." 0 $curTaskbar;
+    if (-not $isWin11) { $cmbTaskbar.Enabled = $false; }
+
     $cmbNotif   = Add-SettingRow "Notifications:" "Disabled (Comodo Standard)" "Turns off notification center tracking and toast pop-ups." "Enabled" "Leaves Windows notifications and toast pop-ups turned on." 0 $curNotif;
     $cmbRDP     = Add-SettingRow "Remote Desktop:" "Enabled (Comodo Standard)" "Allows RDP access and securely configures Windows Firewall." "Disabled" "Blocks incoming Remote Desktop connections to this PC." 0 $curRDP;
     $cmbStorage = Add-SettingRow "Storage Sense:" "Disabled" "Turns off automated Storage Sense background cleanup." "Enabled (Comodo Standard)" "Auto-deletes Recycle Bin (1 Day) and Downloads folder (14 Days)." 1 $curStorage;
@@ -231,13 +243,13 @@ function Run-Step1 {
     # Set All Standard Button
     $btnSetStandard = New-Object System.Windows.Forms.Button;
     $btnSetStandard.Text = "Set All Standard";
-    $btnSetStandard.Size = New-Object System.Drawing.Size(230, 40);
+    $btnSetStandard.Size = New-Object System.Drawing.Size(140, 40);
     $btnSetStandard.Location = New-Object System.Drawing.Point(20, ($script:yOffset + 10));
     $btnSetStandard.BackColor = [System.Drawing.Color]::LightYellow;
     $btnSetStandard.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold);
     $btnSetStandard.Add_Click({
         $cmbTheme.SelectedIndex = 1;
-        $cmbTaskbar.SelectedIndex = 0;
+        if ($isWin11) { $cmbTaskbar.SelectedIndex = 0; }
         $cmbNotif.SelectedIndex = 0;
         $cmbRDP.SelectedIndex = 0;
         $cmbStorage.SelectedIndex = 1;
@@ -250,11 +262,10 @@ function Run-Step1 {
     # Apply Settings Button
     $btnApply = New-Object System.Windows.Forms.Button;
     $btnApply.Text = "Apply Settings";
-    $btnApply.Size = New-Object System.Drawing.Size(250, 40);
-    $btnApply.Location = New-Object System.Drawing.Point(260, ($script:yOffset + 10));
+    $btnApply.Size = New-Object System.Drawing.Size(160, 40);
+    $btnApply.Location = New-Object System.Drawing.Point(170, ($script:yOffset + 10));
     $btnApply.BackColor = [System.Drawing.Color]::LightBlue;
     $btnApply.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold);
-
     $btnApply.Add_Click({
         $SetForm.Close();
         Write-Step "Applying custom Windows settings...";
@@ -264,17 +275,19 @@ function Run-Step1 {
         Set-RegKey $themePath "AppsUseLightTheme" $idxTheme;
         Set-RegKey $themePath "SystemUsesLightTheme" $idxTheme;
 
-        $idxTaskbar = $cmbTaskbar.SelectedIndex;
-        Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" $idxTaskbar;
-        
-        if ($idxTaskbar -eq 0) { 
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 0;
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 0;
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3; 
-        } else { 
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 1;
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 1;
-            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3; 
+        if ($isWin11) {
+            $idxTaskbar = $cmbTaskbar.SelectedIndex;
+            Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" $idxTaskbar;
+            
+            if ($idxTaskbar -eq 0) { 
+                Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 0;
+                Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 0;
+                Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3; 
+            } else { 
+                Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarDa" 1;
+                Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarMn" 1;
+                Set-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Search" "SearchboxTaskbarMode" 3; 
+            }
         }
 
         $idxNotif = $cmbNotif.SelectedIndex;
@@ -351,8 +364,23 @@ function Run-Step1 {
         Save-StepState 1;
         $script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings";
     });
-
     $SetForm.Controls.Add($btnApply);
+
+    # Close / Keep Current Button
+    $btnCancel = New-Object System.Windows.Forms.Button;
+    $btnCancel.Text = "Close / Keep Current";
+    $btnCancel.Size = New-Object System.Drawing.Size(160, 40);
+    $btnCancel.Location = New-Object System.Drawing.Point(340, ($script:yOffset + 10));
+    $btnCancel.BackColor = [System.Drawing.Color]::LightGray;
+    $btnCancel.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold);
+    $btnCancel.Add_Click({
+        $SetForm.Close();
+        Write-Success "Windows Settings reviewed and kept current.";
+        Save-StepState 1;
+        $script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings";
+    });
+    $SetForm.Controls.Add($btnCancel);
+
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default;
     $SetForm.ShowDialog() | Out-Null;
 }
@@ -441,7 +469,7 @@ function Run-Step3 {
 
         Write-Step "Applying software updates via Winget...";
         $wingetArgs = @("upgrade", "--all", "--include-unknown", "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements");
-        $wingetProc = Start-Process winget -ArgumentList $wingetArgs -Wait -NoNewWindow -PassThru;
+        $wingetProc = Start-Process winget -ArgumentList$wingetArgs -Wait -NoNewWindow -PassThru;
 
         if ($wingetProc.ExitCode -eq 0) { 
             Write-Success "Winget successfully updated all software."; 
@@ -484,7 +512,6 @@ function Run-Step3 {
 function Run-Step4 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor;
 
-    # Define a clinical-safe bloatware removal list
     $bloatList = @(
         "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.GamingApp",
         "Microsoft.GetHelp", "Microsoft.Getstarted", "Microsoft.MicrosoftOfficeHub",
@@ -641,8 +668,7 @@ function Run-Step8 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor;
     try {
         Write-Log "   -> Purging system and user temp folders..." "DarkGray";
-        $junkPaths = @(
-            $env:TEMP, 
+        $junkPaths = @($env:TEMP, 
             "C:\Windows\Temp", 
             "C:\Windows\Prefetch",
             "C:\Windows\SoftwareDistribution\Download", 
@@ -678,9 +704,9 @@ function Run-Step8 {
             
             # 2. Delete the physical script file BEFORE rebooting
             if ($MyInvocation.MyCommand.Path) {
-                $scriptPath = $MyInvocation.MyCommand.Path;
-                $scriptDir = Split-Path $scriptPath;
-                $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', '';
+                $scriptPath =$MyInvocation.MyCommand.Path;
+                $scriptDir = Split-Path$scriptPath;
+                $baseName = (Get-Item$scriptPath).BaseName -replace ' \(\d+\)$', '';
                 Remove-Item -Path "$scriptDir\$baseName*.ps1" -Force -ErrorAction SilentlyContinue;
             }
 
