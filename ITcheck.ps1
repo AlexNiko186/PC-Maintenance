@@ -212,7 +212,6 @@ function Run-Step1 {
         return $cmb;
     }
 
-    # Read Current States (Defaults standard if undefined)
     $curTheme   = if ((Get-RegKey "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Themes\Personalize" "AppsUseLightTheme" 1) -eq 0) { 0 } else { 1 };
     $curNotif   = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications" "ToastEnabled" 1) -eq 0) { 0 } else { 1 };
     $curRDP     = if ((Get-RegKey "HKLM:\System\CurrentControlSet\Control\Terminal Server" "fDenyTSConnections" 1) -eq 0) { 0 } else { 1 };
@@ -226,7 +225,6 @@ function Run-Step1 {
         $curTaskbar = if ((Get-RegKey "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced" "TaskbarAl" 1) -eq 0) { 0 } else { 1 };
     }
 
-    # Build Menus
     $cmbTheme   = Add-SettingRow "System Theme:" "Dark Mode" "Sets Windows apps and system background to Dark Mode." "Light Mode (Comodo Standard)" "Sets standard Windows app and system background colors." 1 $curTheme;
     
     $taskbarLabel = if ($isWin11) { "Taskbar Alignment:" } else { "Taskbar (Win 11 Only):" };
@@ -240,7 +238,6 @@ function Run-Step1 {
     $cmbWinPerm = Add-SettingRow "Windows Permissions:" "Disabled (Comodo Standard)" "Turns off Ad ID, Activity History, App Launch tracking, and Tailored Experiences." "Windows Default (Enabled)" "Leaves standard Windows behavior tracking active." 0 $curWinPerm;
     $cmbGaming  = Add-SettingRow "Gaming Features:" "Disabled (Comodo Standard)" "Turns off Game Mode, Xbox Game Bar, Game DVR, and background recording." "Enabled" "Leaves Game Mode, Xbox Game Bar, and background recording on." 0 $curGaming;
 
-    # Set All Standard Button
     $btnSetStandard = New-Object System.Windows.Forms.Button;
     $btnSetStandard.Text = "Set All Standard";
     $btnSetStandard.Size = New-Object System.Drawing.Size(140, 40);
@@ -259,7 +256,6 @@ function Run-Step1 {
     });
     $SetForm.Controls.Add($btnSetStandard);
 
-    # Apply Settings Button
     $btnApply = New-Object System.Windows.Forms.Button;
     $btnApply.Text = "Apply Settings";
     $btnApply.Size = New-Object System.Drawing.Size(160, 40);
@@ -354,19 +350,13 @@ function Run-Step1 {
         Set-RegKey "HKCU:\Software\Microsoft\GameBar" "AutoGameModeEnabled" $idxGaming;
 
         Write-Success "Settings applied. Restarting Explorer...";
-        Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue;
-        Start-Sleep -Seconds 2;
-        if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { 
-            Start-Process explorer.exe; 
-        }
-        Start-Sleep -Seconds 1;
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-WindowStyle Hidden -Command `"Stop-Process -Name explorer -Force; Start-Sleep -Seconds 2; Start-Process explorer.exe`"" -Wait -ErrorAction SilentlyContinue;
 
         Save-StepState 1;
         $script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings";
     });
     $SetForm.Controls.Add($btnApply);
 
-    # Close / Keep Current Button
     $btnCancel = New-Object System.Windows.Forms.Button;
     $btnCancel.Text = "Close / Keep Current";
     $btnCancel.Size = New-Object System.Drawing.Size(160, 40);
@@ -392,13 +382,13 @@ function Run-Step2 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor;
     try {
         if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) { 
-            Start-Process explorer.exe;
+            Start-Process -FilePath "explorer.exe";
             Start-Sleep -Seconds 2; 
         }
 
-        Start-Process "ms-settings:windowsupdate" -ErrorAction Stop;
+        Start-Process -FilePath "ms-settings:windowsupdate" -ErrorAction Stop;
         Start-Sleep -Seconds 2;
-        Start-Process "usoclient" -ArgumentList "StartInteractiveScan" -WindowStyle Hidden -ErrorAction SilentlyContinue;
+        Start-Process -FilePath "usoclient.exe" -ArgumentList "StartInteractiveScan" -WindowStyle Hidden -ErrorAction SilentlyContinue;
         
         Write-Log "   -> Script paused. Waiting for IT to close the Settings app..." "DarkGray";
         while (Get-Process -Name "SystemSettings" -ErrorAction SilentlyContinue) { 
@@ -443,33 +433,36 @@ function Run-Step3 {
 
     $btnUpdate = New-Object System.Windows.Forms.Button;
     $btnUpdate.Text = "Install All Updates";
-    $btnUpdate.Location = New-Object System.Drawing.Point(15, 355);$btnUpdate.Size = New-Object System.Drawing.Size(180, 40);
-    $btnUpdate.Enabled =$false;
+    $btnUpdate.Location = New-Object System.Drawing.Point(15, 355);
+    $btnUpdate.Size = New-Object System.Drawing.Size(180, 40);
+    $btnUpdate.Enabled = $false;
     $btnUpdate.BackColor = [System.Drawing.Color]::LightGreen;
     $btnUpdate.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold);
     $UpdateForm.Controls.Add($btnUpdate);
 
     $btnCancel = New-Object System.Windows.Forms.Button;
     $btnCancel.Text = "Close / Cancel";
-    $btnCancel.Location = New-Object System.Drawing.Point(435, 355);$btnCancel.Size = New-Object System.Drawing.Size(180, 40);
-    $btnCancel.Add_Click({$UpdateForm.Close(); 
+    $btnCancel.Location = New-Object System.Drawing.Point(435, 355);
+    $btnCancel.Size = New-Object System.Drawing.Size(180, 40);
+    $btnCancel.Add_Click({ 
+        $UpdateForm.Close(); 
     });
     $UpdateForm.Controls.Add($btnCancel);
 
-    $btnUpdate.Add_Click({$confirm = [System.Windows.Forms.MessageBox]::Show("WARNING: Winget will update ALL out-of-date software.`n`nIf it updates your remote access tool (e.g., AnyDesk, TeamViewer, Splashtop), YOUR REMOTE CONNECTION WILL DROP.`n`nDo you want to proceed?", "Remote Connection Warning", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning);
+    $btnUpdate.Add_Click({
+        $confirm = [System.Windows.Forms.MessageBox]::Show("WARNING: Winget will update ALL out-of-date software.`n`nIf it updates your remote access tool (e.g., AnyDesk, TeamViewer, Splashtop), YOUR REMOTE CONNECTION WILL DROP.`n`nDo you want to proceed?", "Remote Connection Warning", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning);
         
         if ($confirm -eq "No") { 
             return; 
         }
 
-        $btnUpdate.Enabled =$false;
-        $btnCancel.Enabled =$false;
+        $btnUpdate.Enabled = $false;
+        $btnCancel.Enabled = $false;
         $txtOutput.Text += "`n`nStarting silent background installation... Please wait.";
         $UpdateForm.Update();
 
         Write-Step "Applying software updates via Winget...";
-        $wingetArgs = @("upgrade", "--all", "--include-unknown", "--silent", "--disable-interactivity", "--accept-package-agreements", "--accept-source-agreements");
-        $wingetProc = Start-Process winget -ArgumentList$wingetArgs -Wait -NoNewWindow -PassThru;
+        $wingetProc = Start-Process -FilePath "winget.exe" -ArgumentList "upgrade --all --include-unknown --silent --disable-interactivity --accept-package-agreements --accept-source-agreements" -Wait -NoNewWindow -PassThru;
 
         if ($wingetProc.ExitCode -eq 0) { 
             Write-Success "Winget successfully updated all software."; 
@@ -482,22 +475,23 @@ function Run-Step3 {
         $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)";
     });
 
-    $UpdateForm.Add_Shown({$UpdateForm.Update();
+    $UpdateForm.Add_Shown({
+        $UpdateForm.Update();
         try {
             if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
                 $txtOutput.Text = "Error: Winget is not installed or recognized on this PC.";
             } else {
-                Start-Process winget -ArgumentList "source update" -Wait -NoNewWindow | Out-Null;
+                Start-Process -FilePath "winget.exe" -ArgumentList "source update" -Wait -NoNewWindow | Out-Null;
                 $wingetOut = winget upgrade --accept-source-agreements | Out-String;
-                $cleanOut =$wingetOut -replace "\x1B\[[0-9;]*[a-zA-Z]", "";
+                $cleanOut = $wingetOut -replace "\x1B\[[0-9;]*[a-zA-Z]", "";
 
                 if ($cleanOut -match "No installed package found matching input criteria" -or $cleanOut -match "No available upgrades") {
                     $txtOutput.Text = "Scan Complete: All installed software is already up to date!";
                     Save-StepState 3;
                     $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)";
                 } else {
-                    $txtOutput.Text =$cleanOut;
-                    $btnUpdate.Enabled =$true;
+                    $txtOutput.Text = $cleanOut;
+                    $btnUpdate.Enabled = $true;
                 }
             }
         } catch { 
@@ -527,7 +521,7 @@ function Run-Step4 {
     
     foreach ($app in @($bloatList)) {
         if (Get-AppxPackage -Name $app -ErrorAction SilentlyContinue) {
-            $installedBloat +=$app;
+            $installedBloat += $app;
         }
     }
 
@@ -541,22 +535,25 @@ function Run-Step4 {
 
     $BloatForm = New-Object System.Windows.Forms.Form;
     $BloatForm.Text = "Remove Bloatware";
-    $BloatForm.Size = New-Object System.Drawing.Size(400, 450);$BloatForm.StartPosition = "CenterParent";
+    $BloatForm.Size = New-Object System.Drawing.Size(400, 450);
+    $BloatForm.StartPosition = "CenterParent";
     $BloatForm.FormBorderStyle = "FixedDialog";
-    $BloatForm.MaximizeBox =$false;
+    $BloatForm.MaximizeBox = $false;
 
     $lblInfo = New-Object System.Windows.Forms.Label;
     $lblInfo.Text = "Select bloatware to remove:";
     $lblInfo.Location = New-Object System.Drawing.Point(15, 15);
-    $lblInfo.AutoSize =$true;
+    $lblInfo.AutoSize = $true;
     $lblInfo.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold);
     $BloatForm.Controls.Add($lblInfo);
 
     $chkList = New-Object System.Windows.Forms.CheckedListBox;
-    $chkList.Location = New-Object System.Drawing.Point(15, 40);$chkList.Size = New-Object System.Drawing.Size(350, 300);
-    $chkList.CheckOnClick =$true;
+    $chkList.Location = New-Object System.Drawing.Point(15, 40);
+    $chkList.Size = New-Object System.Drawing.Size(350, 300);
+    $chkList.CheckOnClick = $true;
     
-    foreach ($app in @($installedBloat)) {$chkList.Items.Add($app,$true) | Out-Null;
+    foreach ($app in @($installedBloat)) {
+        $chkList.Items.Add($app, $true) | Out-Null;
     }
     
     $BloatForm.Controls.Add($chkList);
@@ -564,14 +561,17 @@ function Run-Step4 {
     $btnUninstall = New-Object System.Windows.Forms.Button;
     $btnUninstall.Text = "Uninstall Selected";
     $btnUninstall.Location = New-Object System.Drawing.Point(15, 355);
-    $btnUninstall.Size = New-Object System.Drawing.Size(160, 40);$btnUninstall.BackColor = [System.Drawing.Color]::LightCoral;
+    $btnUninstall.Size = New-Object System.Drawing.Size(160, 40);
+    $btnUninstall.BackColor = [System.Drawing.Color]::LightCoral;
     $btnUninstall.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold);
     $BloatForm.Controls.Add($btnUninstall);
 
     $btnSkip = New-Object System.Windows.Forms.Button;
     $btnSkip.Text = "Skip / Keep All";
-    $btnSkip.Location = New-Object System.Drawing.Point(205, 355);$btnSkip.Size = New-Object System.Drawing.Size(160, 40);
-    $btnSkip.Add_Click({$BloatForm.Close();
+    $btnSkip.Location = New-Object System.Drawing.Point(205, 355);
+    $btnSkip.Size = New-Object System.Drawing.Size(160, 40);
+    $btnSkip.Add_Click({ 
+        $BloatForm.Close();
         Save-StepState 4;
         $script:btnStep4.Text = "[ DONE ] 4. Remove Bloatware";
         Write-Log "   -> Bloatware removal skipped." "DarkGray";
@@ -579,15 +579,14 @@ function Run-Step4 {
     $BloatForm.Controls.Add($btnSkip);
 
     $btnUninstall.Add_Click({
-        $btnUninstall.Enabled =$false;
-        $btnSkip.Enabled =$false;
+        $btnUninstall.Enabled = $false;
+        $btnSkip.Enabled = $false;
         $BloatForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor;
         Write-Log "   -> Removing selected bloatware... this may take a moment." "DarkGray";
         $BloatForm.Update();
         
         foreach ($item in @($chkList.CheckedItems)) {
-            Get-AppxPackage -Name $item -AllUsers -ErrorAction SilentlyContinue | Remove-AppxPackage -AllUsers -ErrorAction SilentlyContinue;
-            Get-AppxProvisionedPackage -Online | Where-Object { $_.DisplayName -eq$item } | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue;
+            Start-Process -FilePath "powershell.exe" -ArgumentList "-WindowStyle Hidden -Command `"Get-AppxPackage -Name '$item' -AllUsers | Remove-AppxPackage -AllUsers; Get-AppxProvisionedPackage -Online | Where-Object { `$_.DisplayName -eq '$item' } | Remove-AppxProvisionedPackage -Online`"" -Wait -ErrorAction SilentlyContinue;
         }
         
         Write-Success "Selected bloatware successfully removed.";
@@ -608,7 +607,7 @@ function Run-Step5 {
     try {
         $ccleanerExe = "C:\ITDepartment\CCleaner\CCleaner64.exe";
         if (Test-Path $ccleanerExe) {
-            Start-Process $ccleanerExe -Wait;
+            Start-Process -FilePath $ccleanerExe -Wait;
             Write-Success "CCleaner closed. Step logged as complete.";
             Save-StepState 5;
             $script:btnStep5.Text = "[ DONE ] 5. Launch CCleaner";
@@ -629,7 +628,7 @@ function Run-Step6 {
     try {
         $revoExe = "C:\ITDepartment\Revo Uninstaller Pro\RevoUPPort.exe";
         if (Test-Path $revoExe) {
-            Start-Process $revoExe -Wait;
+            Start-Process -FilePath $revoExe -Wait;
             Write-Success "Revo Uninstaller closed. Step logged as complete.";
             Save-StepState 6;
             $script:btnStep6.Text = "[ DONE ] 6. Launch Revo Uninstaller";
@@ -647,9 +646,9 @@ function Run-Step7 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor;
     try {
         Set-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Power" -Name "HiberbootEnabled" -Value 0 -Type DWord -ErrorAction SilentlyContinue;
-        powercfg.exe /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c;
-        powercfg.exe /change standby-timeout-ac 0;
-        powercfg.exe /change monitor-timeout-ac 0;
+        Start-Process -FilePath "powercfg.exe" -ArgumentList "/setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c" -Wait -WindowStyle Hidden;
+        Start-Process -FilePath "powercfg.exe" -ArgumentList "/change standby-timeout-ac 0" -Wait -WindowStyle Hidden;
+        Start-Process -FilePath "powercfg.exe" -ArgumentList "/change monitor-timeout-ac 0" -Wait -WindowStyle Hidden;
         Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers" -Name "DisableAutoplay" -Value 1 -Type DWord -ErrorAction SilentlyContinue;
         Set-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer" -Name "NoDriveTypeAutoRun" -Value 255 -Type DWord -ErrorAction SilentlyContinue;
         Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2 -Type DWord -ErrorAction SilentlyContinue;
@@ -668,7 +667,8 @@ function Run-Step8 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor;
     try {
         Write-Log "   -> Purging system and user temp folders..." "DarkGray";
-        $junkPaths = @($env:TEMP, 
+        $junkPaths = @(
+            $env:TEMP, 
             "C:\Windows\Temp", 
             "C:\Windows\Prefetch",
             "C:\Windows\SoftwareDistribution\Download", 
@@ -704,9 +704,9 @@ function Run-Step8 {
             
             # 2. Delete the physical script file BEFORE rebooting
             if ($MyInvocation.MyCommand.Path) {
-                $scriptPath =$MyInvocation.MyCommand.Path;
-                $scriptDir = Split-Path$scriptPath;
-                $baseName = (Get-Item$scriptPath).BaseName -replace ' \(\d+\)$', '';
+                $scriptPath = $MyInvocation.MyCommand.Path;
+                $scriptDir = Split-Path $scriptPath;
+                $baseName = (Get-Item $scriptPath).BaseName -replace ' \(\d+\)$', '';
                 Remove-Item -Path "$scriptDir\$baseName*.ps1" -Force -ErrorAction SilentlyContinue;
             }
 
@@ -720,7 +720,7 @@ function Run-Step8 {
 }
 
 function Run-AllSteps {
-    $btnRunAll.Enabled =$false;
+    $btnRunAll.Enabled = $false;
     
     if ($script:btnStep1.Text -notmatch "DONE") { Run-Step1; }
     if ($script:btnStep2.Text -notmatch "DONE") { Run-Step2; }
@@ -835,14 +835,14 @@ $completedSteps = Get-StepState;
 
 if ($completedSteps.Count -gt 0) {
     Write-Log "   -> Resuming session. Marking completed steps..." "DarkOrange" -Bold;
-    if ($completedSteps -contains 1) {$script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings"; }
-    if ($completedSteps -contains 2) {$script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates"; }
-    if ($completedSteps -contains 3) {$script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)"; }
-    if ($completedSteps -contains 4) {$script:btnStep4.Text = "[ DONE ] 4. Remove Bloatware"; }
-    if ($completedSteps -contains 5) {$script:btnStep5.Text = "[ DONE ] 5. Launch CCleaner"; }
-    if ($completedSteps -contains 6) {$script:btnStep6.Text = "[ DONE ] 6. Launch Revo Uninstaller"; }
-    if ($completedSteps -contains 7) {$script:btnStep7.Text = "[ DONE ] 7. Apply Clinic Optimizations"; }
-    if ($completedSteps -contains 8) {$script:btnStep8.Text = "[ DONE ] 8. Purge Temp & Cache"; }
+    if ($completedSteps -contains 1) { $script:btnStep1.Text = "[ DONE ] 1. Configure Windows Settings"; }
+    if ($completedSteps -contains 2) { $script:btnStep2.Text = "[ DONE ] 2. Run Windows Updates"; }
+    if ($completedSteps -contains 3) { $script:btnStep3.Text = "[ DONE ] 3. Update Apps (Winget)"; }
+    if ($completedSteps -contains 4) { $script:btnStep4.Text = "[ DONE ] 4. Remove Bloatware"; }
+    if ($completedSteps -contains 5) { $script:btnStep5.Text = "[ DONE ] 5. Launch CCleaner"; }
+    if ($completedSteps -contains 6) { $script:btnStep6.Text = "[ DONE ] 6. Launch Revo Uninstaller"; }
+    if ($completedSteps -contains 7) { $script:btnStep7.Text = "[ DONE ] 7. Apply Clinic Optimizations"; }
+    if ($completedSteps -contains 8) { $script:btnStep8.Text = "[ DONE ] 8. Purge Temp & Cache"; }
 }
 
 # Render the GUI
