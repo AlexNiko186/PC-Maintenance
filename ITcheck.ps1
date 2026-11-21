@@ -2,6 +2,8 @@
 # ITcheck.ps1 - Clinic PC Maintenance Utility
 # Interactive deployment script with auto-resume tracking
 #
+# Runs step by step (no Run All button).
+#
 # Changes in this revision:
 #   - Step 1 now always removes Widgets, Task View (and Chat on Win 11) from the taskbar
 #   - Auto-elevates instead of just exiting when not run as Admin
@@ -554,7 +556,7 @@ function Run-Step4 {
 
     $bloatList = @(
         "Microsoft.BingNews", "Microsoft.BingWeather", "Microsoft.GamingApp",
-        "Microsoft.GetHelp", "Microsoft.Getstarted", "Microsoft.MicrosoftOfficeHub",
+        "Microsoft.GetHelp", "Microsoft.Getstarted",
         "Microsoft.MicrosoftSolitaireCollection", "Microsoft.People",
         "Microsoft.SkypeApp", "Microsoft.WindowsFeedbackHub", "Microsoft.Xbox.TCUI",
         "Microsoft.XboxApp", "Microsoft.XboxGamingOverlay", "Microsoft.XboxIdentityProvider",
@@ -640,19 +642,70 @@ function Run-Step4 {
     $BloatForm.ShowDialog() | Out-Null
 }
 
-function Invoke-ExternalTool ([string]$Exe, [string]$Label, [int]$StepNum) {
+# Makes sure a tool is present: if the exe is missing, finds its zip, extracts it, then returns the exe path
+function Resolve-ToolPath ([string]$Exe, [string]$Label, [string]$ZipPattern) {
+    if (Test-Path $Exe) { return $Exe }
+
+    $root = "C:\ITDepartment"
+    $searchDirs = @($root)
+    if ($script:ScriptPath) { $searchDirs += (Split-Path $script:ScriptPath) }
+
+    Write-Log "   -> $Label not found. Looking for a zip to extract..." "DarkGray"
+    $zip = $null
+    foreach ($dir in ($searchDirs | Select-Object -Unique)) {
+        $zip = Get-ChildItem -Path $dir -Filter $ZipPattern -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($zip) { break }
+    }
+    if (-not $zip) {
+        Write-WarningMsg "No zip matching '$ZipPattern' found in $($searchDirs -join ', ')."
+        return $null
+    }
+
+    Write-Log "   -> Extracting $($zip.Name)..." "DarkGray"
+    $staging = Join-Path $env:TEMP ("ITtool_" + [guid]::NewGuid().ToString("N"))
+    try {
+        Expand-Archive -Path $zip.FullName -DestinationPath $staging -Force -ErrorAction Stop
+
+        $targetDir = Split-Path $Exe
+        if (Test-Path (Join-Path $staging (Split-Path $Exe -Leaf))) {
+            # Zip contents are the app files themselves -> put them in the app folder
+            New-Item -Path $targetDir -ItemType Directory -Force | Out-Null
+            Copy-Item -Path (Join-Path $staging "*") -Destination $targetDir -Recurse -Force
+        } else {
+            # Zip contains the app folder -> extract into C:\ITDepartment
+            Copy-Item -Path (Join-Path $staging "*") -Destination $root -Recurse -Force
+        }
+    } catch {
+        Write-ErrorMsg "Failed to extract $($zip.Name): $_"
+        return $null
+    } finally {
+        Remove-Item -Path $staging -Recurse -Force -ErrorAction SilentlyContinue
+    }
+
+    if (Test-Path $Exe) { return $Exe }
+
+    # Zip used a different folder layout: look for the exe anywhere under C:\ITDepartment
+    $found = Get-ChildItem -Path $root -Filter (Split-Path $Exe -Leaf) -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($found) { return $found.FullName }
+
+    Write-WarningMsg "Extracted $($zip.Name) but could not find $(Split-Path $Exe -Leaf)."
+    return $null
+}
+
+function Invoke-ExternalTool ([string]$Exe, [string]$Label, [int]$StepNum, [string]$ZipPattern) {
     Write-Step "Step ${StepNum}: Launching $Label"
-    Write-Log "   -> Script paused. Waiting for IT to finish and close $Label..." "DarkGray"
 
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::WaitCursor
     try {
-        if (Test-Path $Exe) {
-            $proc = Start-Process -FilePath $Exe -PassThru
+        $path = Resolve-ToolPath $Exe $Label $ZipPattern
+        if ($path) {
+            Write-Log "   -> Script paused. Waiting for IT to finish and close $Label..." "DarkGray"
+            $proc = Start-Process -FilePath $path -PassThru
             Wait-ProcessUI $proc
             Write-Success "$Label closed. Step logged as complete."
             Set-StepDone $StepNum
         } else {
-            Write-WarningMsg "$Label not found at $Exe."
+            Write-WarningMsg "$Label is not available. Step not marked complete."
         }
     } catch {
         Write-ErrorMsg "Failed to launch ${Label}: $_"
@@ -660,8 +713,8 @@ function Invoke-ExternalTool ([string]$Exe, [string]$Label, [int]$StepNum) {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
-function Run-Step5 { Invoke-ExternalTool "C:\ITDepartment\CCleaner\CCleaner64.exe" "CCleaner" 5 }
-function Run-Step6 { Invoke-ExternalTool "C:\ITDepartment\Revo Uninstaller Pro\RevoUPPort.exe" "Revo Uninstaller" 6 }
+function Run-Step5 { Invoke-ExternalTool "C:\ITDepartment\CCleaner\CCleaner64.exe" "CCleaner" 5 "*CCleaner*.zip" }
+function Run-Step6 { Invoke-ExternalTool "C:\ITDepartment\Revo Uninstaller Pro\RevoUPPort.exe" "Revo Uninstaller" 6 "Revo Uninstaller Pro Portable*.zip" }
 
 function Run-Step7 {
     Write-Step "Step 7: Clinic PC Optimizations"
@@ -754,20 +807,6 @@ function Run-Step8 {
     $MainForm.Cursor = [System.Windows.Forms.Cursors]::Default
 }
 
-function Run-AllSteps {
-    $btnRunAll.Enabled = $false
-    try {
-        foreach ($i in 1..8) {
-            if ($script:StepButtons[$i].Text -notmatch "DONE") { & "Run-Step$i" }
-        }
-        Write-Log "`n===============================" "DarkCyan" -Bold
-        Write-Log " ALL PROCESSES COMPLETE!" "Green" -Bold
-        Write-Log "===============================" "DarkCyan" -Bold
-    } finally {
-        $btnRunAll.Enabled = $true
-    }
-}
-
 # ==========================================
 # UI CONSTRUCTION
 # ==========================================
@@ -806,10 +845,6 @@ function Add-GuiButton ([string]$Text, [scriptblock]$Action) {
     $Panel.Controls.Add($btn)
     return $btn
 }
-
-$btnRunAll = Add-GuiButton ">> RUN ALL STEPS" { Run-AllSteps }
-$btnRunAll.BackColor = [System.Drawing.Color]::LightGreen
-$btnRunAll.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
 
 $script:StepButtons[1] = Add-GuiButton "1. $($script:StepNames[1])" { Run-Step1 }
 $script:StepButtons[2] = Add-GuiButton "2. $($script:StepNames[2])" { Run-Step2 }
@@ -856,7 +891,7 @@ if ($script:ScriptPath -and -not (Test-Path $ShortcutPath)) {
 }
 
 Write-Log "Welcome to the Clinic PC Maintenance Utility." "DarkCyan" -Bold
-Write-Log "Click an individual step or 'RUN ALL STEPS'." "Black"
+Write-Log "Click each step in order, one at a time." "Black"
 Write-Log "Use the restart button below when you need to reboot the system." "DarkGray"
 Write-Log "Note: The script will pause while external tools are open.`n" "DarkGray"
 
